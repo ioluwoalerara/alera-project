@@ -32,7 +32,6 @@ import AleraVisitExit            from "./AleraVisitExit.jsx";
 import AleraQueue               from "./AleraQueue.jsx";
 import AleraAdmin               from "./AleraAdmin.jsx";
 import AleraNHIS                from "./AleraNHIS.jsx";
-import AleraDispensing          from "./AleraDispensing.jsx";
 import AleraDispensingScreen    from "./AleraDispensingScreen.jsx";
 import { SCREEN_ACCESS }         from "./AleraRoles.js";
 import { useAuth }               from "./AleraAuth.jsx";
