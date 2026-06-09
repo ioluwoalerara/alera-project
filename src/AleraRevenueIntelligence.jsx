@@ -151,7 +151,7 @@ Return ONLY a JSON array of insights, no markdown:
 
       const res = await fetch("https://zrstwfjnkpfobsboprzs.supabase.co/functions/v1/claude-proxy", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": "Bearer sb_publishable_9vhVnI6SveqLHto0wGpD7A_qwtHX8Dr", "apikey": "sb_publishable_9vhVnI6SveqLHto0wGpD7A_qwtHX8Dr" },
+        headers: { "Content-Type": "application/json", "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpyc3R3Zmpua3Bmb2JzYm9wcnpzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI4NjAwNjgsImV4cCI6MjA4ODQzNjA2OH0.K7C2_ScRsysaemOsDyaF67Y--ONEJREAMJNFXtvBmVc", "apikey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpyc3R3Zmpua3Bmb2JzYm9wcnpzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI4NjAwNjgsImV4cCI6MjA4ODQzNjA2OH0.K7C2_ScRsysaemOsDyaF67Y--ONEJREAMJNFXtvBmVc" },
         body: JSON.stringify({
           model: "claude-sonnet-4-20250514",
           max_tokens: 800,

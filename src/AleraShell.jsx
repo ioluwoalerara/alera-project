@@ -225,7 +225,7 @@ function AiGuidePanel({ role, screen, encounterState, onClose, initialGoal }) {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "apikey": "sb_publishable_9vhVnI6SveqLHto0wGpD7A_qwtHX8Dr",
+          "apikey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpyc3R3Zmpua3Bmb2JzYm9wcnpzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI4NjAwNjgsImV4cCI6MjA4ODQzNjA2OH0.K7C2_ScRsysaemOsDyaF67Y--ONEJREAMJNFXtvBmVc",
           "anthropic-dangerous-direct-browser-access": "true",
         },
         body: JSON.stringify({
