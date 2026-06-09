@@ -368,6 +368,10 @@ export default function AleraEncounter({ patient: patientProp, onComplete }) {
   const [starting,         setStarting]         = useState(false);
   const [chiefComplaint,   setChiefComplaint]   = useState(patient.visitReason || "");
   const [urgency,          setUrgency]          = useState("routine");
+  const [painScale,        setPainScale]        = useState(null);
+  const [newAllergy,       setNewAllergy]       = useState("");
+  const [allergies,        setAllergyList]      = useState(patient.allergies || []);
+  const [showHistory,      setShowHistory]      = useState(false);
 
   const bmi    = calcBMI(vitals.weight, vitals.height);
   const bmiCat = bmiCategory(bmi);
@@ -486,6 +490,8 @@ export default function AleraEncounter({ patient: patientProp, onComplete }) {
           notes,
           visitId,
           startTime,
+          painScale,
+          allergies,
         });
       }, 900);
     }, 1200);
@@ -632,6 +638,91 @@ export default function AleraEncounter({ patient: patientProp, onComplete }) {
                 </div>
               </div>
             </SectionCard>
+
+            {/* Pain Scale — nurse only */}
+            {!isDoctor && (
+              <SectionCard title="Pain Assessment" icon="😣" subtitle="Patient-reported pain level (0 = no pain, 10 = worst)" style={{ animation: "fadeUp 0.3s ease 0.05s both" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                    {Array.from({ length: 11 }, (_, i) => {
+                      const sel = painScale === i;
+                      const color = i <= 3 ? T.sage : i <= 6 ? T.amber : T.rose;
+                      const bg = i <= 3 ? T.sageLight : i <= 6 ? T.amberLight : T.roseLight;
+                      return (
+                        <button key={i} onClick={() => setPainScale(i)} style={{
+                          width: 42, height: 42, borderRadius: T.radiusSm, border: `2px solid ${sel ? color : T.border}`,
+                          background: sel ? bg : T.white, color: sel ? color : T.inkSub,
+                          fontSize: 14, fontWeight: sel ? 800 : 400, cursor: "pointer",
+                          fontFamily: "'Syne',sans-serif", transition: "all 0.12s",
+                        }}>{i}</button>
+                      );
+                    })}
+                  </div>
+                  {painScale !== null && (
+                    <div style={{ fontSize: 13, color: painScale <= 3 ? T.sage : painScale <= 6 ? T.amber : T.rose, fontWeight: 600 }}>
+                      {painScale === 0 ? "No pain" : painScale <= 3 ? "Mild pain" : painScale <= 6 ? "Moderate pain" : painScale <= 8 ? "Severe pain" : "Worst pain imaginable"}
+                      {" — score " + painScale + "/10"}
+                    </div>
+                  )}
+                </div>
+              </SectionCard>
+            )}
+
+            {/* Allergy Recording — nurse captures during triage */}
+            {!isDoctor && (
+              <SectionCard title="Allergies" icon="⚠️" subtitle="Record or confirm patient allergies" style={{ animation: "fadeUp 0.3s ease 0.08s both" }}
+                right={allergies.length > 0 ? <Tag color={T.rose} bg={T.roseLight}>⚠ {allergies.length} recorded</Tag> : <Tag color={T.sage} bg={T.sageLight}>None recorded</Tag>}
+              >
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  {allergies.length > 0 && (
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                      {allergies.map((a, i) => (
+                        <div key={i} style={{
+                          display: "flex", alignItems: "center", gap: 6,
+                          padding: "4px 10px", background: T.roseLight, border: `1px solid rgba(184,50,50,0.2)`,
+                          borderRadius: 20, fontSize: 12, color: T.rose,
+                        }}>
+                          <span>{typeof a === "string" ? a : a.allergen}</span>
+                          <button onClick={() => setAllergyList(prev => prev.filter((_, j) => j !== i))} style={{
+                            background: "none", border: "none", color: T.rose, cursor: "pointer", fontSize: 14, padding: 0, lineHeight: 1,
+                          }}>×</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <input
+                      value={newAllergy}
+                      onChange={e => setNewAllergy(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === "Enter" && newAllergy.trim()) {
+                          setAllergyList(prev => [...prev, newAllergy.trim()]);
+                          setNewAllergy("");
+                        }
+                      }}
+                      placeholder="Type allergy and press Enter (e.g. Penicillin)"
+                      style={{
+                        flex: 1, padding: "8px 12px", border: `1px solid ${T.border}`,
+                        borderRadius: T.radiusSm, fontSize: 13, fontFamily: "'DM Sans',sans-serif",
+                        outline: "none", color: T.ink,
+                      }}
+                    />
+                    <button
+                      onClick={() => { if (newAllergy.trim()) { setAllergyList(prev => [...prev, newAllergy.trim()]); setNewAllergy(""); } }}
+                      style={{
+                        padding: "8px 14px", background: T.sage, color: "#fff", border: "none",
+                        borderRadius: T.radiusSm, fontSize: 13, fontWeight: 700, cursor: "pointer",
+                        fontFamily: "'Syne',sans-serif",
+                      }}
+                    >+ Add</button>
+                  </div>
+                  <button
+                    onClick={() => setAllergyList([])}
+                    style={{ fontSize: 12, color: T.sage, background: "none", border: "none", cursor: "pointer", textAlign: "left", padding: 0 }}
+                  >✓ No known allergies</button>
+                </div>
+              </SectionCard>
+            )}
 
             {/* Assign Doctor */}
             <SectionCard title="Assign Doctor" icon="🩺"

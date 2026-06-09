@@ -122,16 +122,43 @@ function startRecognition({ onResult, onError, onEnd, continuous = false }) {
  */
 async function parseDictationToSOAP(transcript, patient) {
   try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
+    const res = await fetch("https://zrstwfjnkpfobsboprzs.supabase.co/functions/v1/claude-proxy", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         model: "claude-sonnet-4-20250514",
-        max_tokens: 600,
-        system: `You are a clinical note assistant for a Nigerian clinic EMR. Given a doctor's free-form dictation, extract and return a JSON object with exactly these four keys: subjective, objective, assessment, plan. Each value should be a clean, professional clinical sentence or two. If a section isn't mentioned in the dictation, return an empty string "". Return ONLY valid JSON, no markdown, no explanation.`,
+        max_tokens: 1200,
+        system: `You are a clinical note assistant for a Nigerian clinic EMR. Given a doctor's free-form dictation, extract and return a JSON object. Return ONLY valid JSON, no markdown, no explanation. Use Nigerian clinical guidelines and drug names.`,
         messages: [{
           role: "user",
-          content: `Patient context: ${patient?.name}, ${patient.age}yr ${patient.sex}. Chief complaint: ${patient.visitReason}.\n\nDictation: "${transcript}"\n\nReturn JSON only.`,
+          content: `Patient: ${patient?.name || "Unknown"}, ${patient?.age || "?"}yr ${patient?.sex || "?"}.
+Chief complaint: ${patient?.visitReason || "Not specified"}.
+Allergies: ${Array.isArray(patient?.allergies) ? patient.allergies.join(", ") : patient?.allergies || "None"}.
+
+Doctor dictation: "${transcript}"
+
+Return JSON with exactly these keys:
+{
+  "subjective": "Patient history and symptoms in clinical language",
+  "objective": "Examination findings and vital signs",
+  "assessment": "Diagnosis name",
+  "icd_code": "ICD-10 code if identifiable, else empty string",
+  "plan": "Numbered treatment plan",
+  "prescriptions": [
+    {
+      "drug_name": "Generic drug name",
+      "strength": "e.g. 500mg",
+      "form": "Tablet/Capsule/Syrup/etc",
+      "frequency": "e.g. BD, TDS, OD",
+      "duration": "e.g. 5 days",
+      "route": "Oral/IM/IV/Topical",
+      "quantity": 10,
+      "instructions": "e.g. Take with food"
+    }
+  ]
+}
+
+Only include prescriptions if drugs were mentioned. Use common Nigerian drugs (Artemether/Lumefantrine, Amoxicillin, Paracetamol, Metronidazole, etc).`,
         }],
       }),
     });
@@ -176,101 +203,215 @@ function Pill({ children, color = "sage", onClick, removable, onRemove, size = "
   );
 }
 
-function AiPanel({ suggestion, onAccept, onDismiss }) {
+function AiPanel({ suggestion, onAccept, onDismiss, loading }) {
   const [open, setOpen] = useState(true);
+  const [activeTab, setActiveTab] = useState("differentials");
+  const [appliedDx, setAppliedDx] = useState(null);
+
   if (!open) return null;
+
+  const riskColors = {
+    Low: { color: "#4ADE80", bg: "rgba(74,222,128,0.1)", border: "rgba(74,222,128,0.3)" },
+    Moderate: { color: "#FCD34D", bg: "rgba(252,211,77,0.1)", border: "rgba(252,211,77,0.3)" },
+    High: { color: "#FB923C", bg: "rgba(251,146,60,0.1)", border: "rgba(251,146,60,0.3)" },
+    Critical: { color: "#F87171", bg: "rgba(248,113,113,0.1)", border: "rgba(248,113,113,0.3)" },
+  };
+  const likelihoodColors = { High: "#4ADE80", Medium: "#FCD34D", Low: "#94A3B8" };
+  const rc = riskColors[suggestion?.risk_level] || riskColors.Low;
+
   return (
     <div style={{
-      background: "linear-gradient(135deg, #0A0F1E, #0E1830)",
+      background: "linear-gradient(135deg, #0A0F1E 0%, #0D1628 100%)",
       border: "1.5px solid rgba(30,107,85,0.4)",
       borderRadius: 14, overflow: "hidden", marginBottom: 20,
     }}>
+      {/* Header */}
       <div style={{
-        padding: "12px 18px",
-        borderBottom: "1px solid rgba(255,255,255,0.06)",
+        padding: "12px 18px", borderBottom: "1px solid rgba(255,255,255,0.06)",
         display: "flex", alignItems: "center", gap: 10,
       }}>
         <div style={{
-          width: 26, height: 26, borderRadius: 7,
+          width: 28, height: 28, borderRadius: 8,
           background: "linear-gradient(135deg,#1E6B55,#27856A)",
           display: "flex", alignItems: "center", justifyContent: "center",
-          fontSize: 13, color: "#fff", flexShrink: 0,
+          fontSize: 14, color: "#fff", flexShrink: 0,
         }}>✦</div>
-        <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: 700, fontSize: 13, color: "#fff" }}>
-          Alera AI Clinical Assistant
+        <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: 800, fontSize: 13, color: "#fff" }}>
+          Alera AI · Clinical Decision Support
         </div>
-        <div style={{
-          marginLeft: "auto", fontSize: 10,
-          padding: "2px 8px", borderRadius: 4,
-          background: "rgba(30,107,85,0.2)", color: "#27856A",
-          fontFamily: "'JetBrains Mono',monospace",
-        }}>LIVE ANALYSIS</div>
-        <button onClick={() => setOpen(false)} style={{
-          background: "none", border: "none", color: "rgba(255,255,255,0.3)",
-          cursor: "pointer", fontSize: 16, padding: 0, lineHeight: 1,
-        }}>✕</button>
-      </div>
-      <div style={{ padding: "16px 18px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-        {/* Diagnoses */}
-        <div>
-          <div style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", fontFamily: "'JetBrains Mono',monospace", marginBottom: 8, letterSpacing: "0.8px", textTransform: "uppercase" }}>Likely Diagnoses</div>
-          {suggestion.diagnoses.map((d, i) => (
-            <div key={i} onClick={() => onAccept("assessment", d)} style={{
-              display: "flex", alignItems: "center", gap: 8,
-              padding: "7px 10px", borderRadius: 8, marginBottom: 5,
-              background: i === 0 ? "rgba(30,107,85,0.2)" : "rgba(255,255,255,0.04)",
-              border: i === 0 ? "1px solid rgba(30,107,85,0.35)" : "1px solid rgba(255,255,255,0.06)",
-              cursor: "pointer", transition: "all 0.15s",
-            }}
-              onMouseEnter={e => { e.currentTarget.style.background = "rgba(30,107,85,0.25)"; e.currentTarget.style.borderColor = "rgba(30,107,85,0.5)"; }}
-              onMouseLeave={e => { e.currentTarget.style.background = i === 0 ? "rgba(30,107,85,0.2)" : "rgba(255,255,255,0.04)"; e.currentTarget.style.borderColor = i === 0 ? "rgba(30,107,85,0.35)" : "rgba(255,255,255,0.06)"; }}
-            >
-              <span style={{ fontSize: 10, color: i === 0 ? "#27856A" : "rgba(255,255,255,0.25)", fontFamily: "'JetBrains Mono',monospace" }}>{i === 0 ? "▸ LIKELY" : `  #${i + 1}`}</span>
-              <span style={{ fontSize: 13, color: i === 0 ? "#fff" : "rgba(255,255,255,0.55)", fontWeight: i === 0 ? 600 : 400 }}>{d}</span>
-              {i === 0 && <span style={{ marginLeft: "auto", fontSize: 10, color: "#27856A" }}>← use</span>}
-            </div>
-          ))}
-        </div>
-        {/* Recommended tests + risk */}
-        <div>
-          <div style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", fontFamily: "'JetBrains Mono',monospace", marginBottom: 8, letterSpacing: "0.8px", textTransform: "uppercase" }}>Recommended Tests</div>
-          <div style={{ display: "flex", flexWrap: "wrap", marginBottom: 14 }}>
-            {suggestion.tests.map((t, i) => (
-              <span key={i} style={{
-                fontSize: 11, padding: "3px 9px",
-                background: "rgba(26,95,168,0.2)", color: "#5B9EE8",
-                border: "1px solid rgba(26,95,168,0.3)",
-                borderRadius: 5, margin: "2px 3px 2px 0",
-                fontFamily: "'JetBrains Mono',monospace",
-              }}>{t}</span>
-            ))}
+        {loading ? (
+          <div style={{ marginLeft: "auto", fontSize: 11, color: "#27856A", fontFamily: "'JetBrains Mono',monospace", display: "flex", alignItems: "center", gap: 6 }}>
+            <span style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", background: "#27856A", animation: "pulse 1s infinite" }} />
+            Analyzing…
           </div>
-          <div style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", fontFamily: "'JetBrains Mono',monospace", marginBottom: 8, letterSpacing: "0.8px", textTransform: "uppercase" }}>Risk Flags</div>
-          {suggestion.risk.map((r, i) => (
-            <div key={i} style={{ fontSize: 12, color: "rgba(255,200,100,0.85)", marginBottom: 4, display: "flex", gap: 6 }}>
-              <span>⚠</span><span>{r}</span>
-            </div>
-          ))}
+        ) : (
+          <>
+            {suggestion?.risk_level && (
+              <div style={{
+                marginLeft: "auto", fontSize: 10, padding: "3px 10px", borderRadius: 20,
+                background: rc.bg, color: rc.color, border: `1px solid ${rc.border}`,
+                fontFamily: "'Syne',sans-serif", fontWeight: 700,
+              }}>
+                {suggestion.risk_level} Risk
+              </div>
+            )}
+            <button onClick={() => setOpen(false)} style={{
+              background: "none", border: "none", color: "rgba(255,255,255,0.3)",
+              cursor: "pointer", fontSize: 18, padding: "0 0 0 8px", lineHeight: 1,
+            }}>✕</button>
+          </>
+        )}
+      </div>
+
+      {loading && (
+        <div style={{ padding: "20px 18px", color: "rgba(255,255,255,0.4)", fontSize: 13, fontStyle: "italic" }}>
+          Claude is analyzing symptoms and generating differential diagnoses…
         </div>
-      </div>
-      {/* Preventive care */}
-      <div style={{ padding: "12px 18px", borderTop: "1px solid rgba(255,255,255,0.06)", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-        <span style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", fontFamily: "'JetBrains Mono',monospace" }}>PREVENTIVE:</span>
-        {suggestion.preventive.map((p, i) => (
-          <span key={i} style={{
-            fontSize: 11, padding: "3px 10px",
-            background: "rgba(232,134,10,0.15)", color: "#E8A53A",
-            border: "1px solid rgba(232,134,10,0.25)", borderRadius: 5,
-          }}>🛡 {p}</span>
-        ))}
-        <button onClick={() => onAccept("plan", suggestion.plan)} style={{
-          marginLeft: "auto", padding: "6px 14px",
-          background: "rgba(30,107,85,0.25)", color: "#27856A",
-          border: "1px solid rgba(30,107,85,0.4)", borderRadius: 7,
-          fontSize: 12, fontWeight: 700, cursor: "pointer",
-          fontFamily: "'DM Sans',sans-serif",
-        }}>✓ Use AI Plan</button>
-      </div>
+      )}
+
+      {!loading && suggestion && (
+        <>
+          {/* Tabs */}
+          <div style={{ display: "flex", borderBottom: "1px solid rgba(255,255,255,0.06)", padding: "0 18px" }}>
+            {[
+              { key: "differentials", label: "Differentials" },
+              { key: "tests", label: "Tests" },
+              { key: "plan", label: "Treatment Plan" },
+            ].map(t => (
+              <button key={t.key} onClick={() => setActiveTab(t.key)} style={{
+                padding: "8px 14px", border: "none", background: "transparent",
+                borderBottom: `2px solid ${activeTab === t.key ? "#27856A" : "transparent"}`,
+                color: activeTab === t.key ? "#27856A" : "rgba(255,255,255,0.35)",
+                fontSize: 12, fontWeight: 600, cursor: "pointer",
+                fontFamily: "'DM Sans',sans-serif", transition: "all 0.15s",
+              }}>{t.label}</button>
+            ))}
+            {suggestion.risk_reason && (
+              <div style={{
+                marginLeft: "auto", alignSelf: "center",
+                fontSize: 11, color: rc.color, fontStyle: "italic",
+                maxWidth: 200, textAlign: "right",
+              }}>
+                ⚠ {suggestion.risk_reason}
+              </div>
+            )}
+          </div>
+
+          {/* Differentials tab */}
+          {activeTab === "differentials" && (
+            <div style={{ padding: "14px 18px", display: "flex", flexDirection: "column", gap: 8 }}>
+              {(suggestion.differentials || []).map((d, i) => (
+                <div key={i} style={{
+                  background: i === 0 ? "rgba(30,107,85,0.15)" : "rgba(255,255,255,0.03)",
+                  border: `1px solid ${i === 0 ? "rgba(30,107,85,0.4)" : "rgba(255,255,255,0.07)"}`,
+                  borderRadius: 10, padding: "12px 14px",
+                  transition: "all 0.15s",
+                }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                    <span style={{
+                      fontSize: 10, fontFamily: "'JetBrains Mono',monospace",
+                      color: likelihoodColors[d.likelihood] || "#94A3B8",
+                      background: `${likelihoodColors[d.likelihood]}22`,
+                      padding: "2px 7px", borderRadius: 4,
+                    }}>{d.likelihood || "?"}</span>
+                    <span style={{ fontFamily: "'Syne',sans-serif", fontWeight: 700, fontSize: 14, color: "#fff" }}>{d.name}</span>
+                    {d.icd && <span style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", fontFamily: "'JetBrains Mono',monospace" }}>{d.icd}</span>}
+                    <button
+                      onClick={() => { onAccept("assessment", d.name); if (d.icd) onAccept("icd", d.icd); setAppliedDx(i); }}
+                      style={{
+                        marginLeft: "auto", padding: "3px 10px", borderRadius: 6,
+                        border: `1px solid ${appliedDx === i ? "#27856A" : "rgba(30,107,85,0.4)"}`,
+                        background: appliedDx === i ? "rgba(30,107,85,0.4)" : "rgba(30,107,85,0.15)",
+                        color: "#27856A", fontSize: 11, fontWeight: 700, cursor: "pointer",
+                        fontFamily: "'DM Sans',sans-serif",
+                      }}
+                    >{appliedDx === i ? "✓ Applied" : "Use"}</button>
+                  </div>
+                  {d.reasoning && (
+                    <div style={{ fontSize: 12, color: "rgba(255,255,255,0.55)", marginBottom: 6, lineHeight: 1.5 }}>{d.reasoning}</div>
+                  )}
+                  <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+                    {d.confirmatory_tests?.length > 0 && (
+                      <div>
+                        <div style={{ fontSize: 9, color: "rgba(255,255,255,0.25)", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 4 }}>Confirm with</div>
+                        <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                          {d.confirmatory_tests.map((t, ti) => (
+                            <span key={ti} style={{ fontSize: 10, padding: "2px 7px", background: "rgba(26,84,168,0.2)", color: "#5B9EE8", border: "1px solid rgba(26,84,168,0.3)", borderRadius: 4 }}>{t}</span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {d.red_flags?.length > 0 && (
+                      <div>
+                        <div style={{ fontSize: 9, color: "rgba(255,255,255,0.25)", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 4 }}>Red flags</div>
+                        <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                          {d.red_flags.map((f, fi) => (
+                            <span key={fi} style={{ fontSize: 10, padding: "2px 7px", background: "rgba(184,50,50,0.2)", color: "#F87171", border: "1px solid rgba(184,50,50,0.3)", borderRadius: 4 }}>⚠ {f}</span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+              <div style={{ fontSize: 10, color: "rgba(255,255,255,0.2)", marginTop: 4, textAlign: "center", fontStyle: "italic" }}>
+                AI suggestions — always verify clinically before applying
+              </div>
+            </div>
+          )}
+
+          {/* Tests tab */}
+          {activeTab === "tests" && (
+            <div style={{ padding: "14px 18px" }}>
+              <div style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", fontFamily: "'JetBrains Mono',monospace", marginBottom: 10, letterSpacing: 0.8, textTransform: "uppercase" }}>
+                Recommended Investigations
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                {(suggestion.recommended_tests || []).map((t, i) => (
+                  <span key={i} style={{
+                    padding: "6px 14px", borderRadius: 8,
+                    background: "rgba(26,84,168,0.15)", color: "#5B9EE8",
+                    border: "1px solid rgba(26,84,168,0.3)",
+                    fontSize: 12, fontFamily: "'DM Sans',sans-serif",
+                  }}>🔬 {t}</span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Plan tab */}
+          {activeTab === "plan" && (
+            <div style={{ padding: "14px 18px" }}>
+              {suggestion.treatment_suggestion && (
+                <div style={{
+                  background: "rgba(30,107,85,0.1)", border: "1px solid rgba(30,107,85,0.3)",
+                  borderRadius: 8, padding: "10px 14px", marginBottom: 12,
+                  fontSize: 13, color: "rgba(255,255,255,0.7)", lineHeight: 1.6,
+                }}>{suggestion.treatment_suggestion}</div>
+              )}
+              {suggestion.suggested_plan && (
+                <div style={{ marginBottom: 14 }}>
+                  <div style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", fontFamily: "'JetBrains Mono',monospace", marginBottom: 8, letterSpacing: 0.8, textTransform: "uppercase" }}>Suggested Plan</div>
+                  <div style={{
+                    fontSize: 12, color: "rgba(255,255,255,0.6)", lineHeight: 1.8,
+                    whiteSpace: "pre-line",
+                  }}>{suggestion.suggested_plan}</div>
+                </div>
+              )}
+              <button
+                onClick={() => onAccept("plan", suggestion.suggested_plan)}
+                style={{
+                  padding: "8px 18px", borderRadius: 8,
+                  background: "rgba(30,107,85,0.25)", color: "#27856A",
+                  border: "1px solid rgba(30,107,85,0.4)",
+                  fontSize: 13, fontWeight: 700, cursor: "pointer",
+                  fontFamily: "'DM Sans',sans-serif",
+                }}
+              >✓ Apply This Plan</button>
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }
@@ -352,7 +493,7 @@ function SOAPField({ label, fieldKey, value, onChange, onVoice, voiceActive, pla
                 onMouseEnter={e => { e.currentTarget.style.background = "#0A0F1E"; e.currentTarget.style.color = "#fff"; }}
                 onMouseLeave={e => { e.currentTarget.style.background = "#F0EDE8"; e.currentTarget.style.color = "#4A5060"; }}
               >
-                {c.code} — {c.label}
+                {typeof c === "string" ? c : `${c.code} — ${c.label}`}
               </span>
             ))}
           </div>
@@ -379,6 +520,17 @@ export default function AleraClinicalNoteEditor({ patient, onComplete }) {
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
   const [showSignOff, setShowSignOff] = useState(false);
+  const [medHistory, setMedHistory] = useState({
+    currentMeds: patient.nurseNotes ? `[Nurse notes: ${patient.nurseNotes}]` : "",
+    pmh: "",
+    familyHistory: "",
+    socialHistory: "",
+  });
+  const [reconciledMeds, setReconciledMeds] = useState([]); // confirmed med list
+  const [newMed, setNewMed] = useState("");
+  const [ros, setRos] = useState({});
+  const [labOrders, setLabOrders] = useState([]);
+  const [followUp, setFollowUp] = useState({ weeks: "", instructions: "", referral: "" });
   const [noteTimer, setNoteTimer] = useState(0);
   const timerRef = useRef(null);
 
@@ -404,12 +556,71 @@ export default function AleraClinicalNoteEditor({ patient, onComplete }) {
   useEffect(() => () => clearInterval(timerRef.current), []);
 
   // AI analysis on subjective change
+  // Real Claude AI diagnosis assistant — debounced 1.5s after typing stops
+  const aiTimerRef = useRef(null);
+  const [aiLoading, setAiLoading] = useState(false);
+
   useEffect(() => {
-    if (soap.subjective.length < 20) { setAiSuggestion(null); return; }
-    const lower = soap.subjective.toLowerCase();
-    const key = Object.keys(AI_SUGGESTIONS).find(k => lower.includes(k)) || "default";
-    setAiSuggestion(AI_SUGGESTIONS[key]);
-  }, [soap.subjective]);
+    if (soap.subjective.length < 20) { setAiSuggestion(null); setAiLoading(false); return; }
+    clearTimeout(aiTimerRef.current);
+    // Only show loading AFTER debounce fires, not during typing
+    aiTimerRef.current = setTimeout(async () => {
+      setAiLoading(true);
+      setAiSuggestion(null);
+      try {
+        const vitals = patient.vitals || {};
+        const prompt = `You are a clinical decision support assistant for a Nigerian doctor. Analyze the following and return ONLY valid JSON with no markdown.
+
+Patient: ${patient.name || "Unknown"}, ${patient.age || "?"}, ${patient.sex || "?"}, Blood group: ${patient.blood || "?"}
+Chief complaint / subjective: ${soap.subjective}
+Objective findings: ${soap.objective || "Not yet recorded"}
+Vitals: BP ${vitals.bp || "?"}, Temp ${vitals.temp || "?"}, Pulse ${vitals.pulse || "?"}, SpO2 ${vitals.spo2 || "?"}
+Allergies: ${Array.isArray(patient.allergies) ? patient.allergies.join(", ") : patient.allergies || "None"}
+
+Return JSON with exactly this structure:
+{
+  "differentials": [
+    {
+      "name": "Diagnosis name",
+      "icd": "ICD-10 code",
+      "likelihood": "High",
+      "reasoning": "1-2 sentences why this fits",
+      "red_flags": ["flag1"],
+      "confirmatory_tests": ["test1"]
+    }
+  ],
+  "recommended_tests": ["test1", "test2"],
+  "treatment_suggestion": "First-line treatment based on Nigerian clinical guidelines",
+  "suggested_plan": "1. Step one\n2. Step two\n3. Step three",
+  "risk_level": "Low",
+  "risk_reason": "Brief reason"
+}
+
+Provide 3-5 differentials ranked by likelihood. Be specific to Nigerian clinical context (malaria, typhoid, hypertension, diabetes, sickle cell, TB). Return ONLY the JSON object.`;
+
+        const res = await fetch("https://zrstwfjnkpfobsboprzs.supabase.co/functions/v1/claude-proxy", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            model: "claude-sonnet-4-20250514",
+            max_tokens: 1000,
+            messages: [{ role: "user", content: prompt }],
+          }),
+        });
+        const data = await res.json();
+        const text = data.content?.find(c => c.type === "text")?.text || "";
+        const clean = text.replace(/```json|```/g, "").trim();
+        const parsed = JSON.parse(clean);
+        console.log("[AleraAI] parsed:", JSON.stringify(parsed.differentials?.slice(0,2)));
+        setAiSuggestion(parsed);
+      } catch(e) {
+        console.error("[AleraAI] Diagnosis assistant error:", e);
+        setAiSuggestion(null);
+      }
+      setAiLoading(false);
+    }, 2000);
+    return () => clearTimeout(aiTimerRef.current);
+  }, [soap.subjective, soap.objective]);
 
   // ICD-10 lookup on assessment change
   useEffect(() => {
@@ -428,6 +639,14 @@ export default function AleraClinicalNoteEditor({ patient, onComplete }) {
   function handleAiAccept(field, value) {
     if (field === "plan") {
       setSoap(s => ({ ...s, plan: value }));
+    } else if (field === "icd") {
+      // value is just the code string e.g. "R50.9" — wrap as object
+      const icdObj = typeof value === "string" ? { code: value, label: value } : value;
+      setSelectedIcd(icdObj);
+      setIcdCodes(prev => {
+        const exists = prev.some(c => (c.code || c) === (icdObj.code || icdObj));
+        return exists ? prev : [icdObj, ...prev].slice(0, 5);
+      });
     } else {
       setSoap(s => ({ ...s, assessment: value }));
     }
@@ -438,6 +657,7 @@ export default function AleraClinicalNoteEditor({ patient, onComplete }) {
   const [voiceError, setVoiceError] = useState(null);
   const [fullNoteListening, setFullNoteListening] = useState(false);
   const [fullNoteParsing,  setFullNoteParsing]  = useState(false);
+  const [aiPrescriptions,  setAiPrescriptions]  = useState([]);
 
   // Dictate into a single SOAP field
   function handleVoice(field) {
@@ -510,6 +730,15 @@ export default function AleraClinicalNoteEditor({ patient, onComplete }) {
             assessment: parsed.assessment || s.assessment,
             plan:       parsed.plan       || s.plan,
           }));
+          // Apply ICD code if returned
+          if (parsed.icd_code) {
+            setIcdCodes(prev => [parsed.icd_code, ...prev.filter(c => c !== parsed.icd_code)].slice(0, 5));
+            setSelectedIcd(parsed.icd_code);
+          }
+          // Apply prescriptions if returned
+          if (parsed.prescriptions?.length > 0) {
+            setAiPrescriptions(parsed.prescriptions);
+          }
         } else {
           // Fallback: drop full transcript into subjective
           setSoap(s => ({ ...s, subjective: s.subjective ? s.subjective + " " + transcript : transcript }));
@@ -668,18 +897,21 @@ export default function AleraClinicalNoteEditor({ patient, onComplete }) {
           </div>
 
           {/* Tabs */}
-          <div style={{ display: "flex", gap: 0, marginBottom: 20, background: "#fff", borderRadius: 10, padding: 4, border: "1.5px solid #E0DCD4", width: "fit-content" }}>
+          <div style={{ display: "flex", gap: 0, marginBottom: 20, background: "#fff", borderRadius: 10, padding: 4, border: "1.5px solid #E0DCD4", flexWrap: "wrap" }}>
             {[
-              { key: "soap", label: "📋 SOAP Note" },
+              { key: "soap",    label: "📋 SOAP Note" },
+              { key: "history", label: "🏥 Medical History" },
+              { key: "ros",     label: "🔍 Review of Systems" },
+              { key: "labs",    label: "🔬 Lab Orders" },
+              { key: "followup",label: "📅 Follow-Up" },
               { key: "templates", label: "⚡ Templates" },
-              { key: "history", label: "📁 Past Notes" },
             ].map(t => (
               <button key={t.key} onClick={() => setActiveTab(t.key)} style={{
-                padding: "8px 18px", border: "none", borderRadius: 7, fontSize: 13, fontWeight: 600,
+                padding: "8px 16px", border: "none", borderRadius: 7, fontSize: 12, fontWeight: 600,
                 background: activeTab === t.key ? "#0A0F1E" : "transparent",
                 color: activeTab === t.key ? "#fff" : "#6B7080",
                 cursor: "pointer", fontFamily: "'DM Sans',sans-serif",
-                transition: "all 0.15s",
+                transition: "all 0.15s", whiteSpace: "nowrap",
               }}>{t.label}</button>
             ))}
           </div>
@@ -687,12 +919,101 @@ export default function AleraClinicalNoteEditor({ patient, onComplete }) {
           {/* ── SOAP Tab ── */}
           {activeTab === "soap" && (
             <div style={{ animation: "slideIn 0.25s ease" }}>
+
+              {/* AI Voice Hero Banner */}
+              <div style={{
+                background: fullNoteListening
+                  ? "linear-gradient(135deg,#7C0000,#B80000)"
+                  : "linear-gradient(135deg,#0D1117,#1A2636)",
+                borderRadius: 12, padding: "16px 20px", marginBottom: 16,
+                display: "flex", alignItems: "center", gap: 16,
+                border: fullNoteListening ? "1.5px solid rgba(255,80,80,0.4)" : "1.5px solid rgba(30,107,85,0.3)",
+                transition: "all 0.3s",
+              }}>
+                <button
+                  onClick={handleFullNoteByVoice}
+                  style={{
+                    width: 56, height: 56, borderRadius: "50%",
+                    background: fullNoteListening ? "rgba(255,80,80,0.3)" : "rgba(30,107,85,0.25)",
+                    cursor: fullNoteParsing ? "default" : "pointer",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: 24, flexShrink: 0, transition: "all 0.2s",
+                    animation: fullNoteListening ? "voicePulse 1s infinite" : "none",
+                    border: `1.5px solid ${fullNoteListening ? "rgba(255,80,80,0.5)" : "rgba(30,107,85,0.4)"}`,
+                  }}
+                >
+                  {fullNoteListening ? "🔴" : fullNoteParsing ? "⏳" : "🎙"}
+                </button>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: 800, fontSize: 15, color: "#fff", marginBottom: 3 }}>
+                    {fullNoteListening
+                      ? "Listening… speak your full clinical note"
+                      : fullNoteParsing
+                      ? "Claude is parsing your dictation…"
+                      : "AI Voice-First Documentation"}
+                  </div>
+                  <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)" }}>
+                    {fullNoteListening
+                      ? "Say diagnosis, vitals, symptoms, and drugs. Tap the mic to stop."
+                      : fullNoteParsing
+                      ? "Filling SOAP note, ICD codes, and prescription automatically…"
+                      : "Tap 🎙 and dictate the full encounter. Claude fills all fields including prescription."}
+                  </div>
+                </div>
+                {fullNoteListening && (
+                  <div style={{ fontSize: 11, color: "rgba(255,80,80,0.8)", fontFamily: "'JetBrains Mono',monospace" }}>
+                    ● REC
+                  </div>
+                )}
+              </div>
+
+              {/* AI Prescriptions from voice */}
+              {aiPrescriptions.length > 0 && (
+                <div style={{
+                  background: "rgba(94,63,174,0.08)", border: "1.5px solid rgba(94,63,174,0.25)",
+                  borderRadius: 10, padding: "14px 16px", marginBottom: 16,
+                }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                    <span style={{ fontSize: 14 }}>💊</span>
+                    <span style={{ fontFamily: "'Syne',sans-serif", fontWeight: 700, fontSize: 13, color: "#5E3FAE" }}>
+                      AI Generated Prescription ({aiPrescriptions.length} drug{aiPrescriptions.length > 1 ? "s" : ""})
+                    </span>
+                    <button onClick={() => setAiPrescriptions([])} style={{ marginLeft: "auto", background: "none", border: "none", color: "#5E3FAE", cursor: "pointer", fontSize: 14 }}>✕</button>
+                  </div>
+                  {aiPrescriptions.map((rx, i) => (
+                    <div key={i} style={{
+                      background: "#fff", border: "1px solid rgba(94,63,174,0.15)",
+                      borderRadius: 8, padding: "10px 12px", marginBottom: 6,
+                      display: "flex", alignItems: "center", justifyContent: "space-between",
+                    }}>
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: "#0D1117" }}>
+                          {rx.drug_name} {rx.strength && <span style={{ fontWeight: 400, color: "#6E7891" }}>· {rx.strength}</span>}
+                        </div>
+                        <div style={{ fontSize: 11, color: "#6E7891" }}>
+                          {[rx.form, rx.frequency, rx.duration, rx.route].filter(Boolean).join(" · ")}
+                          {rx.instructions ? " · " + rx.instructions : ""}
+                        </div>
+                      </div>
+                      <div style={{ fontSize: 10, color: "#5E3FAE", fontWeight: 700, background: "#F0EBFF", padding: "2px 8px", borderRadius: 10 }}>
+                        Qty: {rx.quantity || "??"}
+                      </div>
+                    </div>
+                  ))}
+                  <div style={{ fontSize: 11, color: "#5E3FAE", marginTop: 6, fontStyle: "italic" }}>
+                    ✓ Prescription will be pre-filled when you proceed to the prescription screen
+                  </div>
+                </div>
+              )}
+
               {/* AI Panel */}
-              {aiSuggestion && (
+              {(aiLoading || aiSuggestion) && (
                 <AiPanel
+                  key={aiLoading ? "loading" : "loaded"}
                   suggestion={aiSuggestion}
+                  loading={aiLoading}
                   onAccept={handleAiAccept}
-                  onDismiss={() => setAiSuggestion(null)}
+                  onDismiss={() => { setAiSuggestion(null); setAiLoading(false); }}
                 />
               )}
 
@@ -729,7 +1050,8 @@ export default function AleraClinicalNoteEditor({ patient, onComplete }) {
                   icdCodes={icdCodes}
                   onIcdClick={c => {
                     setSelectedIcd(c);
-                    setField("assessment", soap.assessment ? `${soap.assessment} [${c.code}]` : `${c.label} [${c.code}]`);
+                    // Only set assessment text if empty — never append ICD code into text
+                    if (!soap.assessment) setField("assessment", c.label);
                   }}
                 />
                 <SOAPField
@@ -782,18 +1104,268 @@ export default function AleraClinicalNoteEditor({ patient, onComplete }) {
           )}
 
           {/* ── History Tab ── */}
+          {/* ── Medical History Tab ── */}
           {activeTab === "history" && (
-            <div style={{ animation: "slideIn 0.25s ease" }}>
-              <div style={{ fontSize: 13, color: "#6B7080", marginBottom: 16 }}>Previous encounter notes for {patient?.name}</div>
-              {(patient?.history || []).map((h, i) => (
-                <div key={i} style={{ ...s.card, padding: "16px 20px", marginBottom: 10 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-                    <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: 700, fontSize: 13 }}>{h}</div>
-                    <span style={{ marginLeft: "auto", fontSize: 10, color: "#9A9890", fontFamily: "'JetBrains Mono',monospace" }}>ENCOUNTER #{i + 1}</span>
+            <div style={{ animation: "slideIn 0.25s ease", display: "flex", flexDirection: "column", gap: 16 }}>
+
+              {/* ── MedRec Panel ── */}
+              <div style={{ background: "#F0EBFF", border: "1px solid rgba(94,63,174,0.2)", borderRadius: 10, padding: "16px 18px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                  <span style={{ fontSize: 16 }}>💊</span>
+                  <span style={{ fontFamily: "'Syne',sans-serif", fontWeight: 800, fontSize: 13, color: "#5E3FAE" }}>MEDICATION RECONCILIATION</span>
+                  {reconciledMeds.length > 0 && (
+                    <span style={{ marginLeft: "auto", fontSize: 11, padding: "2px 8px", background: "#5E3FAE", color: "#fff", borderRadius: 10, fontWeight: 700 }}>
+                      {reconciledMeds.length} confirmed
+                    </span>
+                  )}
+                </div>
+
+                {/* Nurse-recorded allergies */}
+                {patient.allergies?.length > 0 && (
+                  <div style={{ marginBottom: 10, padding: "8px 12px", background: "#FDECEA", border: "1px solid rgba(184,50,50,0.2)", borderRadius: 8 }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: "#B83232" }}>⚠ Allergies (nurse-recorded): </span>
+                    <span style={{ fontSize: 12, color: "#3D4558" }}>
+                      {patient.allergies.map(a => typeof a === "string" ? a : a.allergen).join(", ")}
+                    </span>
                   </div>
-                  <div style={{ fontSize: 12, color: "#9A9890" }}>Click to reference this note in the current encounter</div>
+                )}
+
+                {/* Pain scale from triage */}
+                {patient.painScale !== null && patient.painScale !== undefined && (
+                  <div style={{ marginBottom: 10, padding: "8px 12px", background: "#fff", border: "1px solid rgba(94,63,174,0.15)", borderRadius: 8 }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: "#5E3FAE" }}>Pain Score (triage): </span>
+                    <span style={{ fontSize: 12, color: "#3D4558" }}>{patient.painScale}/10 — {patient.painScale <= 3 ? "Mild" : patient.painScale <= 6 ? "Moderate" : "Severe"}</span>
+                  </div>
+                )}
+
+                {/* Confirmed med list */}
+                {reconciledMeds.length > 0 && (
+                  <div style={{ marginBottom: 10, display: "flex", flexWrap: "wrap", gap: 6 }}>
+                    {reconciledMeds.map((med, i) => (
+                      <div key={i} style={{
+                        display: "flex", alignItems: "center", gap: 6,
+                        padding: "4px 10px", background: "#fff",
+                        border: "1px solid rgba(94,63,174,0.3)", borderRadius: 20,
+                        fontSize: 12, color: "#5E3FAE",
+                      }}>
+                        <span>✓ {med}</span>
+                        <button onClick={() => setReconciledMeds(m => m.filter((_, j) => j !== i))} style={{
+                          background: "none", border: "none", color: "#5E3FAE", cursor: "pointer", fontSize: 14, padding: 0,
+                        }}>×</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Add medication */}
+                <div style={{ display: "flex", gap: 8 }}>
+                  <input
+                    value={newMed}
+                    onChange={e => setNewMed(e.target.value)}
+                    onKeyDown={e => { if (e.key === "Enter" && newMed.trim()) { setReconciledMeds(m => [...m, newMed.trim()]); setNewMed(""); } }}
+                    placeholder="Add confirmed medication (e.g. Amlodipine 5mg OD)..."
+                    style={{
+                      flex: 1, padding: "8px 12px", border: "1px solid rgba(94,63,174,0.2)",
+                      borderRadius: 8, fontSize: 12, fontFamily: "'DM Sans',sans-serif",
+                      outline: "none", background: "#fff",
+                    }}
+                  />
+                  <button onClick={() => { if (newMed.trim()) { setReconciledMeds(m => [...m, newMed.trim()]); setNewMed(""); } }} style={{
+                    padding: "8px 14px", background: "#5E3FAE", color: "#fff", border: "none",
+                    borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer",
+                    fontFamily: "'Syne',sans-serif",
+                  }}>+ Add</button>
+                </div>
+                <div style={{ fontSize: 11, color: "#8B7AB8", marginTop: 6 }}>
+                  Add each current medication the patient is taking. This will be compared against new prescriptions.
+                </div>
+              </div>
+
+              {[
+                { key: "currentMeds", label: "Current Medications (Free Text)", placeholder: "List all current medications, doses, and frequency..." },
+                { key: "pmh", label: "Past Medical History", placeholder: "Previous diagnoses, surgeries, hospitalizations, chronic conditions..." },
+                { key: "familyHistory", label: "Family History", placeholder: "Relevant family medical conditions (e.g. diabetes, hypertension, cancer)..." },
+                { key: "socialHistory", label: "Social History", placeholder: "Smoking, alcohol, occupation, living situation..." },
+              ].map(({ key, label, placeholder }) => (
+                <div key={key}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "#6B7080", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>{label}</div>
+                  <textarea
+                    value={medHistory[key]}
+                    onChange={e => setMedHistory(h => ({ ...h, [key]: e.target.value }))}
+                    placeholder={placeholder}
+                    rows={3}
+                    style={{
+                      width: "100%", padding: "10px 14px", borderRadius: 8,
+                      border: "1.5px solid #E0DCD4", fontSize: 13, color: "#0D1117",
+                      fontFamily: "'DM Sans',sans-serif", resize: "vertical",
+                      outline: "none", boxSizing: "border-box",
+                    }}
+                    onFocus={e => e.target.style.borderColor = "#1E6B55"}
+                    onBlur={e => e.target.style.borderColor = "#E0DCD4"}
+                  />
                 </div>
               ))}
+            </div>
+          )}
+
+          {/* ── Review of Systems Tab ── */}
+          {activeTab === "ros" && (
+            <div style={{ animation: "slideIn 0.25s ease" }}>
+              <div style={{ fontSize: 13, color: "#6B7080", marginBottom: 16 }}>
+                Check all systems reviewed. Mark positive findings.
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                {[
+                  "Constitutional (fever, weight loss, fatigue)",
+                  "Cardiovascular (chest pain, palpitations, edema)",
+                  "Respiratory (cough, SOB, wheezing)",
+                  "GI (nausea, vomiting, diarrhea, abdominal pain)",
+                  "GU (dysuria, frequency, discharge)",
+                  "Musculoskeletal (joint pain, swelling, weakness)",
+                  "Neurological (headache, dizziness, numbness)",
+                  "Skin (rash, itching, wounds)",
+                  "EENT (eye pain, hearing, sore throat)",
+                  "Psychiatric (anxiety, depression, sleep)",
+                  "Endocrine (thirst, heat/cold intolerance)",
+                  "Hematologic (bleeding, bruising, lymph nodes)",
+                ].map(system => {
+                  const val = ros[system];
+                  return (
+                    <div key={system} style={{
+                      padding: "10px 12px", background: val === "positive" ? "#FEF5E7" : val === "negative" ? "#E6F3EE" : "#F7F5F1",
+                      borderRadius: 8, border: `1px solid ${val === "positive" ? "#C97A10" : val === "negative" ? "#1A6650" : "#E8E4DE"}`,
+                    }}>
+                      <div style={{ fontSize: 12, color: "#3D4558", marginBottom: 6, lineHeight: 1.4 }}>{system}</div>
+                      <div style={{ display: "flex", gap: 6 }}>
+                        {["negative", "positive", "not reviewed"].map(opt => (
+                          <button key={opt} onClick={() => setRos(r => ({ ...r, [system]: opt }))} style={{
+                            padding: "3px 8px", borderRadius: 4, border: "none", fontSize: 10, fontWeight: 700,
+                            cursor: "pointer", fontFamily: "'Syne',sans-serif",
+                            background: val === opt ? (opt === "positive" ? "#C97A10" : opt === "negative" ? "#1A6650" : "#6E7891") : "#E8E4DE",
+                            color: val === opt ? "#fff" : "#6E7891",
+                          }}>{opt === "not reviewed" ? "N/R" : opt.charAt(0).toUpperCase() + opt.slice(1)}</button>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* ── Lab Orders Tab ── */}
+          {activeTab === "labs" && (
+            <div style={{ animation: "slideIn 0.25s ease" }}>
+              <div style={{ fontSize: 13, color: "#6B7080", marginBottom: 16 }}>Order investigations for this patient</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 20 }}>
+                {[
+                  "FBC", "MP (Malaria Parasite)", "Widal Test", "Blood Culture",
+                  "LFT", "RFT", "Fasting Blood Sugar", "HbA1c",
+                  "Lipid Profile", "Thyroid Function", "Urine MCS", "Stool MCS",
+                  "ECG", "Chest X-Ray", "Abdominal USS", "HIV Screening",
+                  "Hepatitis B", "Hepatitis C", "Genotype", "Pregnancy Test",
+                  "PT/INR", "ESR", "CRP", "CD4 Count",
+                ].map(test => {
+                  const ordered = labOrders.includes(test);
+                  return (
+                    <button key={test} onClick={() => setLabOrders(l => ordered ? l.filter(t => t !== test) : [...l, test])} style={{
+                      padding: "6px 14px", borderRadius: 20, fontSize: 12, fontWeight: 600,
+                      border: `1.5px solid ${ordered ? "#1A6650" : "#E8E4DE"}`,
+                      background: ordered ? "#E6F3EE" : "#fff",
+                      color: ordered ? "#1A6650" : "#6E7891",
+                      cursor: "pointer", fontFamily: "'DM Sans',sans-serif",
+                      transition: "all 0.12s",
+                    }}>
+                      {ordered ? "✓ " : ""}{test}
+                    </button>
+                  );
+                })}
+              </div>
+              {labOrders.length > 0 && (
+                <div style={{ padding: "12px 16px", background: "#E6F3EE", border: "1px solid rgba(26,102,80,0.2)", borderRadius: 8 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "#1A6650", marginBottom: 6 }}>
+                    {labOrders.length} test{labOrders.length > 1 ? "s" : ""} ordered
+                  </div>
+                  <div style={{ fontSize: 13, color: "#3D4558" }}>{labOrders.join(" · ")}</div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── Follow-Up Tab ── */}
+          {activeTab === "followup" && (
+            <div style={{ animation: "slideIn 0.25s ease", display: "flex", flexDirection: "column", gap: 16 }}>
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: "#6B7080", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>
+                  Follow-Up Timeline
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                  {["1 week", "2 weeks", "1 month", "3 months", "6 months", "As needed", "No follow-up"].map(opt => (
+                    <button key={opt} onClick={() => setFollowUp(f => ({ ...f, weeks: opt }))} style={{
+                      padding: "8px 16px", borderRadius: 8, fontSize: 13, fontWeight: 600,
+                      border: `1.5px solid ${followUp.weeks === opt ? "#1A6650" : "#E8E4DE"}`,
+                      background: followUp.weeks === opt ? "#E6F3EE" : "#fff",
+                      color: followUp.weeks === opt ? "#1A6650" : "#6E7891",
+                      cursor: "pointer", fontFamily: "'DM Sans',sans-serif",
+                    }}>{opt}</button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: "#6B7080", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>
+                  Follow-Up Instructions
+                </div>
+                <textarea
+                  value={followUp.instructions}
+                  onChange={e => setFollowUp(f => ({ ...f, instructions: e.target.value }))}
+                  placeholder="Instructions for the patient at next visit..."
+                  rows={3}
+                  style={{
+                    width: "100%", padding: "10px 14px", borderRadius: 8,
+                    border: "1.5px solid #E0DCD4", fontSize: 13, fontFamily: "'DM Sans',sans-serif",
+                    resize: "vertical", outline: "none", boxSizing: "border-box",
+                  }}
+                  onFocus={e => e.target.style.borderColor = "#1E6B55"}
+                  onBlur={e => e.target.style.borderColor = "#E0DCD4"}
+                />
+              </div>
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: "#6B7080", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>
+                  Referral (if needed)
+                </div>
+                <input
+                  value={followUp.referral}
+                  onChange={e => setFollowUp(f => ({ ...f, referral: e.target.value }))}
+                  placeholder="e.g. Refer to cardiologist, Refer to physiotherapy..."
+                  style={{
+                    width: "100%", padding: "10px 14px", borderRadius: 8,
+                    border: "1.5px solid #E0DCD4", fontSize: 13, fontFamily: "'DM Sans',sans-serif",
+                    outline: "none", boxSizing: "border-box",
+                  }}
+                  onFocus={e => e.target.style.borderColor = "#1E6B55"}
+                  onBlur={e => e.target.style.borderColor = "#E0DCD4"}
+                />
+              </div>
+              {(followUp.weeks || followUp.instructions || followUp.referral) && (
+                <div style={{ padding: "12px 16px", background: "#E6F3EE", border: "1px solid rgba(26,102,80,0.2)", borderRadius: 8 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "#1A6650", marginBottom: 4 }}>Follow-Up Plan</div>
+                  {followUp.weeks && <div style={{ fontSize: 13, color: "#3D4558" }}>Return in: <strong>{followUp.weeks}</strong></div>}
+                  {followUp.referral && <div style={{ fontSize: 13, color: "#3D4558", marginTop: 2 }}>Referral: <strong>{followUp.referral}</strong></div>}
+                </div>
+              )}
+              {followUp.weeks && (
+                <button
+                  onClick={() => onComplete?.({ _bookAppointment: true, patient, followUp })}
+                  style={{
+                    padding: "10px 20px", background: "#1A6650", color: "#fff",
+                    border: "none", borderRadius: 8, fontSize: 13, fontWeight: 700,
+                    cursor: "pointer", fontFamily: "'Syne',sans-serif",
+                    display: "flex", alignItems: "center", gap: 8,
+                  }}
+                >
+                  📅 Book Follow-Up Appointment →
+                </button>
+              )}
             </div>
           )}
 
@@ -906,8 +1478,8 @@ export default function AleraClinicalNoteEditor({ patient, onComplete }) {
             <div>
               <div style={{ fontSize: 10, color: "#3A4060", fontFamily: "'JetBrains Mono',monospace", letterSpacing: "1px", textTransform: "uppercase", marginBottom: 10 }}>ICD-10 Selected</div>
               <div style={{ background: "#101828", borderRadius: 10, padding: "12px 14px", border: "1px solid #1A2A40" }}>
-                <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 18, fontWeight: 600, color: "#27856A", marginBottom: 3 }}>{selectedIcd.code}</div>
-                <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)" }}>{selectedIcd.label}</div>
+                <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 18, fontWeight: 600, color: "#27856A", marginBottom: 3 }}>{typeof selectedIcd === "string" ? selectedIcd : selectedIcd.code}</div>
+                <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)" }}>{typeof selectedIcd === "string" ? "" : selectedIcd.label}</div>
               </div>
             </div>
           )}
@@ -1015,7 +1587,7 @@ export default function AleraClinicalNoteEditor({ patient, onComplete }) {
 
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               <button
-                onClick={() => { setShowSignOff(false); onComplete?.({ soap, diagnosis: soap.assessment, icdCodes, discharge: "pharmacy" }); }}
+                onClick={() => { setShowSignOff(false); onComplete?.({ soap, diagnosis: soap.assessment, icdCodes, discharge: "pharmacy", medHistory, ros, labOrders, followUp, aiPrescriptions }); }}
                 style={{
                   padding: "16px 20px", borderRadius: 12, border: "2px solid #1A6650",
                   background: "#E6F3EE", cursor: "pointer", textAlign: "left",
@@ -1031,7 +1603,7 @@ export default function AleraClinicalNoteEditor({ patient, onComplete }) {
               </button>
 
               <button
-                onClick={() => { setShowSignOff(false); onComplete?.({ soap, diagnosis: soap.assessment, icdCodes, discharge: "billing" }); }}
+                onClick={() => { setShowSignOff(false); onComplete?.({ soap, diagnosis: soap.assessment, icdCodes, discharge: "billing", medHistory, ros, labOrders, followUp, aiPrescriptions }); }}
                 style={{
                   padding: "16px 20px", borderRadius: 12, border: "2px solid #C97A10",
                   background: "#FEF5E7", cursor: "pointer", textAlign: "left",

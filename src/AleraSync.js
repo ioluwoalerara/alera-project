@@ -379,6 +379,12 @@ export function retryFailed() {
 
 // ─── Clear synced items (cleanup) ────────────────────────────────────────────
 
+export function clearFailedItems() {
+  const queue = loadQueue().filter(i => i.status !== "failed");
+  saveQueue(queue);
+  notifyListeners();
+}
+
 export function clearSyncedItems() {
   const queue = loadQueue().filter(i => i.status !== "synced");
   saveQueue(queue);

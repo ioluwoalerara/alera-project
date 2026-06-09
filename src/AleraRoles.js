@@ -197,12 +197,12 @@ export const PERMISSIONS = {
 // Which screens each role can access. Used by AleraShell to build the nav.
 
 export const SCREEN_ACCESS = {
-  doctor:       ["queue", "encounter", "notes", "prescription", "billing"],
-  nurse:        ["queue", "encounter", "notes"],
-  receptionist: ["registration", "queue", "encounter"],
-  cashier:      ["queue", "billing", "nhis"],
-  pharmacist:   ["queue", "prescription", "dispensing"],
-  admin:        ["registration", "queue", "encounter", "notes", "prescription", "billing", "nhis", "dispensing", "admin"],
+  doctor:       ["home", "chart", "appointments", "revenue", "consent", "queue", "encounter", "notes", "prescription", "billing", "analytics"],
+  nurse:        ["home", "chart", "appointments", "consent", "queue", "encounter", "notes", "analytics"],
+  receptionist: ["home", "chart", "appointments", "consent", "registration", "queue", "encounter", "analytics"],
+  cashier:      ["home", "chart", "appointments", "queue", "billing", "nhis", "analytics"],
+  pharmacist:   ["home", "chart", "appointments", "queue", "prescription", "dispensing", "analytics"],
+  admin:        ["home", "chart", "appointments", "revenue", "consent", "registration", "queue", "encounter", "notes", "prescription", "billing", "nhis", "dispensing", "admin", "analytics"],
 };
 
 export const SCREEN_META = {
@@ -215,6 +215,12 @@ export const SCREEN_META = {
   admin:         { label: "Admin",          icon: "⚙️",  shortLabel: "Admin"      },
   nhis:          { label: "NHIS Claims",    icon: "🏥",  shortLabel: "NHIS"       },
   dispensing:    { label: "Dispensing",     icon: "💊",  shortLabel: "Dispense"   },
+  chart:         { label: "Patient Chart",  icon: "📋",  shortLabel: "Chart"       },
+  home:          { label: "Home",             icon: "🏠",  shortLabel: "Home"       },
+  appointments:  { label: "Appointments",    icon: "📅",  shortLabel: "Appts"      },
+  analytics:     { label: "Analytics",       icon: "📊",  shortLabel: "Analytics"  },
+  revenue:       { label: "Revenue Intel",   icon: "📈",  shortLabel: "Revenue"    },
+  consent:       { label: "Patient Network",  icon: "🌐",  shortLabel: "Network"    },
 };
 
 // ─── Helper ───────────────────────────────────────────────────────────────────

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useRole } from "./AleraShell.jsx";
 import { useAuth } from "./AleraAuth.jsx";
-import { searchPatients, getPatientAllergies } from "./supabase.js";
+import { searchPatients, getPatientAllergies, checkActiveEncounter, ensureGlobalPatientId } from "./supabase.js";
 
 // ─── Voice Engine ──────────────────────────────────────────────────────────────
 const SPEECH_SUPPORTED =
@@ -37,7 +37,7 @@ function useVoiceInput(onResult) {
  */
 async function parseVoiceToFields(transcript) {
   try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
+    const res = await fetch("https://zrstwfjnkpfobsboprzs.supabase.co/functions/v1/claude-proxy", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -392,6 +392,7 @@ export default function AleraPatientRegistration({ onComplete }) {
   const [voiceError,   setVoiceError]   = useState(null);
   const [voiceTimer, setVoiceTimer] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [activeEncounter, setActiveEncounter] = useState(null); // existing encounter today
   const [searchResults, setSearchResults]   = useState([]);
   const [searchLoading, setSearchLoading]   = useState(false);
   const [matchedPatient, setMatchedPatient] = useState(null);
@@ -426,17 +427,30 @@ export default function AleraPatientRegistration({ onComplete }) {
     return () => { cancelled = true; };
   }, [form.phone, orgId, autofillApplied]);
 
-  // Name-based duplicate detection — live Supabase query
+  // Name-based duplicate detection + same-day active encounter check
   useEffect(() => {
     const fullName = [form.firstName, form.lastName].filter(Boolean).join(" ");
     if (fullName.length < 4 || mode !== "new" || !orgId) {
       setShowDuplicateWarning(false);
+      setActiveEncounter(null);
       return;
     }
     let cancelled = false;
-    searchPatients(form.firstName, orgId).then(({ data }) => {
+    searchPatients(form.firstName, orgId).then(async ({ data }) => {
       if (cancelled) return;
-      setShowDuplicateWarning(!autofillApplied && (data?.length ?? 0) > 0);
+      const hasDupes = !autofillApplied && (data?.length ?? 0) > 0;
+      setShowDuplicateWarning(hasDupes);
+      // Check if any matched patient has an active encounter today
+      if (hasDupes && data?.length > 0) {
+        for (const p of data) {
+          const { hasActive, encounter } = await checkActiveEncounter(p.id, orgId);
+          if (hasActive) {
+            setActiveEncounter({ patient: p, encounter });
+            return;
+          }
+        }
+      }
+      setActiveEncounter(null);
     });
     return () => { cancelled = true; };
   }, [form.firstName, form.lastName, mode, orgId, autofillApplied]);
@@ -857,7 +871,45 @@ export default function AleraPatientRegistration({ onComplete }) {
             )}
 
             {/* Duplicate warning */}
-            {showDuplicateWarning && !autofillApplied && (
+            {activeEncounter && (
+              <div style={{
+                padding: "16px 20px", background: "#FDECEA",
+                border: "1.5px solid rgba(184,50,50,0.3)", borderRadius: 10,
+                marginBottom: 8,
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                  <span style={{ fontSize: 18 }}>🚫</span>
+                  <span style={{ fontFamily: "'Syne',sans-serif", fontWeight: 800, fontSize: 14, color: "#B83232" }}>
+                    Patient Already Registered Today
+                  </span>
+                </div>
+                <div style={{ fontSize: 13, color: "#3D4558", marginBottom: 10 }}>
+                  <strong>{activeEncounter.patient?.first_name} {activeEncounter.patient?.last_name}</strong> ({activeEncounter.patient?.patient_number}) 
+                  {" "}already has an active encounter today. Status: <strong>{activeEncounter.encounter?.status?.replace(/_/g, " ")}</strong>.
+                </div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button
+                    onClick={() => { setMode("returning"); setStep(1.5); setActiveEncounter(null); }}
+                    style={{
+                      padding: "8px 16px", background: "#B83232", color: "#fff",
+                      border: "none", borderRadius: 8, fontSize: 12, fontWeight: 700,
+                      cursor: "pointer", fontFamily: "'Syne',sans-serif",
+                    }}
+                  >View Patient Record</button>
+                  <button
+                    onClick={() => setActiveEncounter(null)}
+                    style={{
+                      padding: "8px 16px", background: "transparent",
+                      border: "1px solid rgba(184,50,50,0.3)", borderRadius: 8,
+                      fontSize: 12, color: "#B83232", cursor: "pointer",
+                      fontFamily: "'DM Sans',sans-serif",
+                    }}
+                  >Dismiss</button>
+                </div>
+              </div>
+            )}
+
+            {showDuplicateWarning && !autofillApplied && !activeEncounter && (
               <AiChip
                 icon="⚠" color="amber"
                 acceptLabel="View existing record"
@@ -1143,7 +1195,10 @@ export default function AleraPatientRegistration({ onComplete }) {
                   ? <div style={{ padding: "10px 18px", background: "#FEF5E7", border: "1px solid rgba(201,122,16,0.3)", borderRadius: 9, fontSize: 13, color: "#C97A10" }}>👁 View only — your role cannot register patients</div>
                   : <button
                   onClick={handleSave}
+                  disabled={!!activeEncounter}
                   style={{
+                    opacity: activeEncounter ? 0.4 : 1,
+                    cursor: activeEncounter ? "not-allowed" : "pointer",
                     padding: "11px 28px", background: "#1E6B55", color: "#fff",
                     border: "none", borderRadius: 9, fontSize: 14, fontWeight: 700,
                     cursor: "pointer", fontFamily: "'Syne',sans-serif",

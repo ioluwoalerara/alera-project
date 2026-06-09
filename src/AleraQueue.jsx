@@ -71,7 +71,7 @@ function initials(first, last) {
 }
 
 // ─── PatientRow ───────────────────────────────────────────────────────────────
-function PatientRow({ enc, onAdvance, onView, onSeePatient, canAdvance, isAdvancing, role }) {
+function PatientRow({ enc, onAdvance, onView, onSeePatient, onViewChart, canAdvance, isAdvancing, role }) {
   const [hov, setHov] = useState(false);
   const st  = STATUS[enc.status]  ?? STATUS.waiting;
   const urg = URGENCY[enc.urgency] ?? URGENCY.non_urgent;
@@ -212,6 +212,18 @@ function PatientRow({ enc, onAdvance, onView, onSeePatient, canAdvance, isAdvanc
             onMouseLeave={e => e.target.style.background = T.sage}
           >
             See Patient →
+          </button>
+        )}
+        {onViewChart && (
+          <button onClick={() => onViewChart(enc.patient?.id || enc.patient_id)} style={{
+            padding: "5px 14px", borderRadius: 6, fontSize: 11, fontWeight: 700,
+            background: "transparent", border: "1px solid " + T.sage, color: T.sage,
+            cursor: "pointer", transition: "all 0.12s", fontFamily: "'Syne',sans-serif",
+          }}
+            onMouseEnter={e => { e.target.style.background = T.sageLight; }}
+            onMouseLeave={e => { e.target.style.background = "transparent"; }}
+          >
+            📋 Chart
           </button>
         )}
         {canAdvance && ["waiting_pharmacy","waiting_billing"].includes(enc.status) && (
@@ -387,7 +399,7 @@ function Row({ label, value }) {
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
-export default function AleraQueue({ onStartEncounter, onSeePatient }) {
+export default function AleraQueue({ onStartEncounter, onSeePatient, onViewChart }) {
   const { role, can } = useRole?.() || { role: "receptionist", can: () => true };
   const { orgId }     = useAuth();
 
@@ -635,6 +647,7 @@ export default function AleraQueue({ onStartEncounter, onSeePatient }) {
               onAdvance={handleAdvance}
               onView={setSelected}
               onSeePatient={onSeePatient}
+              onViewChart={onViewChart}
               canAdvance={canAdvanceStatus}
               isAdvancing={advancing}
               role={role}

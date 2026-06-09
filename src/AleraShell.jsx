@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, createContext, useContext } from "react";
 import { ROLES, ROLE_META, PERMISSIONS, SCREEN_ACCESS, SCREEN_META, can, canRead } from "./AleraRoles.js";
-import { useSyncStatus, retryFailed } from "./AleraSync.js";
+import { useSyncStatus, retryFailed, clearFailedItems } from "./AleraSync.js";
 
 // ─── Voice Engine ─────────────────────────────────────────────────────────────
 const SPEECH_SUPPORTED =
@@ -221,12 +221,11 @@ function AiGuidePanel({ role, screen, encounterState, onClose, initialGoal }) {
     setLoading(true);
 
     try {
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
+      const res = await fetch("https://zrstwfjnkpfobsboprzs.supabase.co/functions/v1/claude-proxy", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-api-key": import.meta.env.VITE_ANTHROPIC_API_KEY,
-          "anthropic-version": "2023-06-01",
+          "apikey": "sb_publishable_9vhVnI6SveqLHto0wGpD7A_qwtHX8Dr",
           "anthropic-dangerous-direct-browser-access": "true",
         },
         body: JSON.stringify({
@@ -372,11 +371,77 @@ function AiGuidePanel({ role, screen, encounterState, onClose, initialGoal }) {
 }
 
 // ─── Main Shell ───────────────────────────────────────────────────────────────
+// ─── More Dropdown ───────────────────────────────────────────────────────────
+function MoreDropdown({ screens, activeScreen, onScreenChange }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    function handleClick(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false); }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
+  const hasActive = screens.includes(activeScreen);
+
+  return (
+    <div ref={ref} style={{ position: "relative" }}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={{
+          padding: "6px 12px", borderRadius: T.radiusSm, border: "none",
+          background: hasActive ? T.ink : "transparent",
+          color: hasActive ? "#fff" : T.inkSub,
+          fontSize: 12, fontWeight: 400, cursor: "pointer",
+          fontFamily: "'DM Sans',sans-serif",
+          display: "flex", alignItems: "center", gap: 4,
+          transition: "all 0.14s",
+        }}
+        onMouseEnter={e => { if (!hasActive) { e.currentTarget.style.background = T.paperDim; e.currentTarget.style.color = T.inkMid; } }}
+        onMouseLeave={e => { if (!hasActive) { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = T.inkSub; } }}
+      >
+        More ▾
+      </button>
+      {open && (
+        <div style={{
+          position: "absolute", top: "calc(100% + 6px)", left: 0,
+          background: T.white, border: `1px solid ${T.border}`,
+          borderRadius: T.radius, boxShadow: "0 8px 24px rgba(13,17,23,0.12)",
+          zIndex: 100, minWidth: 170, overflow: "hidden", padding: 4,
+        }}>
+          {screens.map(s => {
+            const sm = SCREEN_META[s];
+            const active = activeScreen === s;
+            return (
+              <button key={s} onClick={() => { onScreenChange(s); setOpen(false); }} style={{
+                width: "100%", padding: "8px 14px", border: "none",
+                background: active ? T.paperDim : "transparent",
+                color: active ? T.ink : T.inkSub,
+                fontSize: 13, fontWeight: active ? 600 : 400,
+                cursor: "pointer", fontFamily: "'DM Sans',sans-serif",
+                textAlign: "left", display: "flex", alignItems: "center", gap: 8,
+                borderRadius: T.radiusSm,
+              }}
+                onMouseEnter={e => { e.currentTarget.style.background = T.paperDim; e.currentTarget.style.color = T.ink; }}
+                onMouseLeave={e => { e.currentTarget.style.background = active ? T.paperDim : "transparent"; e.currentTarget.style.color = active ? T.ink : T.inkSub; }}
+              >
+                <span>{sm.icon}</span>
+                <span>{sm.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function AleraShell({ role, onLogout, children, activeScreen, onScreenChange, encounterState: encounterStateProp, hasActivePatient }) {
   const [guideOpen,   setGuideOpen]   = useState(false);
   const [goalInput,   setGoalInput]   = useState("");
   const [initialGoal, setInitialGoal] = useState(null);
   const sync = useSyncStatus();
+  const [showSyncPanel, setShowSyncPanel] = useState(false);
 
   // Use live encounter state from AleraApp if available, else blank defaults
   const encounterState = encounterStateProp ?? {
@@ -406,6 +471,71 @@ export default function AleraShell({ role, onLogout, children, activeScreen, onS
   return (
     <RoleContext.Provider value={{ role, permissions: PERMISSIONS[role], can: (p) => can(role, p), canRead: (p) => canRead(role, p) }}>
       <div style={{ minHeight: "100vh", background: T.paper, fontFamily: "'DM Sans',sans-serif" }}>
+        {/* Offline Banner */}
+        {!sync.online && (
+          <div style={{
+            background: "#B83232", color: "#fff", padding: "8px 16px",
+            display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+            fontSize: 13, fontWeight: 600, fontFamily: "'DM Sans',sans-serif",
+            position: "sticky", top: 0, zIndex: 200,
+          }}>
+            <span>⚠</span>
+            <span>You're offline — changes are being saved locally and will sync when you reconnect</span>
+          </div>
+        )}
+
+        {/* Sync Panel Modal */}
+        {showSyncPanel && (
+          <div style={{
+            position: "fixed", inset: 0, background: "rgba(13,17,23,0.5)",
+            zIndex: 300, display: "flex", alignItems: "flex-start", justifyContent: "flex-end",
+            padding: "70px 16px 0",
+          }} onClick={() => setShowSyncPanel(false)}>
+            <div onClick={e => e.stopPropagation()} style={{
+              background: T.white, borderRadius: T.radiusLg, width: 360,
+              boxShadow: "0 24px 64px rgba(13,17,23,0.2)", overflow: "hidden",
+              fontFamily: "'DM Sans',sans-serif",
+            }}>
+              <div style={{ padding: "16px 18px", borderBottom: `1px solid ${T.border}`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: 800, fontSize: 15, color: T.ink }}>
+                  Sync Status
+                </div>
+                <button onClick={() => setShowSyncPanel(false)} style={{ background: "none", border: "none", cursor: "pointer", color: T.inkSub, fontSize: 18 }}>✕</button>
+              </div>
+              <div style={{ padding: "14px 18px" }}>
+                <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+                  {[
+                    { label: `${sync.pending} pending`, color: T.amber },
+                    { label: `${sync.failed} failed`, color: T.rose },
+                  ].map(({ label, color }) => (
+                    <div key={label} style={{ flex: 1, padding: "8px 10px", background: T.paperDim, borderRadius: T.radiusSm, textAlign: "center" }}>
+                      <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: 800, fontSize: 16, color }}>{label.split(" ")[0]}</div>
+                      <div style={{ fontSize: 11, color: T.inkSub }}>{label.split(" ")[1]}</div>
+                    </div>
+                  ))}
+                </div>
+                {sync.failed > 0 && (
+                  <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+                    <button onClick={() => { retryFailed(); }} style={{
+                      flex: 1, padding: "8px", background: T.sageLight, color: T.sage,
+                      border: `1px solid ${T.sageBorder}`, borderRadius: T.radiusSm,
+                      fontSize: 13, fontWeight: 700, cursor: "pointer",
+                    }}>↺ Retry Failed</button>
+                    <button onClick={() => { clearFailedItems(); setShowSyncPanel(false); }} style={{
+                      flex: 1, padding: "8px", background: T.roseLight, color: T.rose,
+                      border: "1px solid rgba(184,50,50,0.2)", borderRadius: T.radiusSm,
+                      fontSize: 13, fontWeight: 700, cursor: "pointer",
+                    }}>🗑 Clear Failed</button>
+                  </div>
+                )}
+                <div style={{ fontSize: 12, color: T.inkSub, textAlign: "center" }}>
+                  {sync.online ? "✅ Connected to Alera servers" : "⚠ Offline — changes saved locally"}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         <style>{`
           @import url('https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=DM+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap');
           * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -434,28 +564,36 @@ export default function AleraShell({ role, onLogout, children, activeScreen, onS
 
           <div style={{ width: 1, height: 18, background: T.border, flexShrink: 0 }} />
 
-          {/* Screen nav */}
-          <nav style={{ display: "flex", gap: 2, flexShrink: 0 }}>
-            {screens.map(s => {
+          {/* Screen nav — responsive with More dropdown */}
+          {/* Screen nav — responsive with More dropdown */}
+          <nav style={{ display: "flex", gap: 2, flexShrink: 0, alignItems: "center" }}>
+            {screens.slice(0, 5).map(s => {
               const sm = SCREEN_META[s];
               const active = activeScreen === s;
               return (
                 <button key={s} onClick={() => onScreenChange(s)} style={{
-                  padding: "6px 14px", borderRadius: T.radiusSm, border: "none",
+                  padding: "6px 12px", borderRadius: T.radiusSm, border: "none",
                   background: active ? T.ink : "transparent",
                   color: active ? "#fff" : T.inkSub,
-                  fontSize: 13, fontWeight: active ? 600 : 400,
+                  fontSize: 12, fontWeight: active ? 600 : 400,
                   cursor: "pointer", fontFamily: "'DM Sans',sans-serif",
-                  transition: "all 0.14s", display: "flex", alignItems: "center", gap: 6,
+                  transition: "all 0.14s", display: "flex", alignItems: "center", gap: 5, whiteSpace: "nowrap",
                 }}
                   onMouseEnter={e => { if (!active) { e.currentTarget.style.background = T.paperDim; e.currentTarget.style.color = T.inkMid; } }}
                   onMouseLeave={e => { if (!active) { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = T.inkSub; } }}
                 >
-                  <span style={{ fontSize: 14 }}>{sm.icon}</span>
+                  <span style={{ fontSize: 13 }}>{sm.icon}</span>
                   <span>{sm.shortLabel}</span>
                 </button>
               );
             })}
+            {screens.length > 5 && (
+              <MoreDropdown
+                screens={screens.slice(5)}
+                activeScreen={activeScreen}
+                onScreenChange={onScreenChange}
+              />
+            )}
           </nav>
 
           {/* ── AI Goal Input — always visible ── */}
@@ -527,14 +665,14 @@ export default function AleraShell({ role, onLogout, children, activeScreen, onS
 
               return (
                 <div
-                  onClick={label === "error" ? retryFailed : undefined}
+                  onClick={() => setShowSyncPanel(true)}
                   title={cfg.title}
                   style={{
                     display: "flex", alignItems: "center", gap: 6,
                     padding: "5px 10px", borderRadius: 20,
                     background: label === "offline" ? "#FDECEA" : label === "error" ? "#FDECEA" : label === "syncing" ? "#FEF5E7" : "#E6F3EE",
                     border: `1px solid ${label === "offline" || label === "error" ? "rgba(184,50,50,0.2)" : label === "syncing" ? "rgba(201,122,16,0.2)" : "rgba(26,102,80,0.2)"}`,
-                    cursor: label === "error" ? "pointer" : "default",
+                    cursor: "pointer",
                   }}>
                   <span style={{
                     width: 7, height: 7, borderRadius: "50%", background: cfg.dot, display: "inline-block", flexShrink: 0,

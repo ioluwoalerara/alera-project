@@ -100,7 +100,7 @@ export async function getAleraClaimsFromDB(session) {
   try {
     const { data, error } = await supabase
       .from("staff")
-      .select("id, org_id, role")
+      .select("id, org_id, role, first_name, last_name")
       .eq("auth_user_id", session.user.id)
       .eq("is_active", true)
       .single();
@@ -111,6 +111,8 @@ export async function getAleraClaimsFromDB(session) {
       staff_id:   data.id,
       alera_role: data.role,
       org_name:   "Alera Health Clinic",
+      first_name: data.first_name,
+      last_name:  data.last_name,
     };
   } catch (e) {
     console.error("[Alera] getAleraClaimsFromDB failed:", e.message);
@@ -444,6 +446,28 @@ export async function recordPayment(billId, paymentData) {
 /**
  * Fetch patient's allergy list.
  */
+/**
+ * Check if a patient has an active encounter today.
+ * Returns { hasActive, encounter } 
+ */
+export async function checkActiveEncounter(patientId, orgId) {
+  const today = new Date().toISOString().slice(0, 10);
+  const { data } = await supabase
+    .from("encounters")
+    .select("id, status, registered_at, visit_number")
+    .eq("patient_id", patientId)
+    .eq("org_id", orgId)
+    .gte("registered_at", today + "T00:00:00.000Z")
+    .not("status", "in", "(completed,discharged)")
+    .order("registered_at", { ascending: false })
+    .limit(1);
+
+  return {
+    hasActive: (data?.length ?? 0) > 0,
+    encounter: data?.[0] ?? null,
+  };
+}
+
 export async function getPatientAllergies(patientId) {
   const { data, error } = await supabase
     .from("patient_allergies")
@@ -455,6 +479,48 @@ export async function getPatientAllergies(patientId) {
 /**
  * Fetch patient's current encounter + history.
  */
+/**
+ * Get full patient chart — all encounters with nested vitals, notes,
+ * diagnoses, prescriptions, and bills.
+ */
+export async function getPatientChart(patientId, limit = 20) {
+  // 1. Patient demographics + allergies
+  const { data: patient } = await supabase
+    .from("patients")
+    .select(`
+      id, first_name, middle_name, last_name, patient_number,
+      date_of_birth, biological_sex, blood_group,
+      phone, address_line1, insurance_provider, nhis_number, nin,
+      created_at,
+      patient_allergies(allergen, severity, reaction)
+    `)
+    .eq("id", patientId)
+    .single();
+
+  // 2. All encounters with nested data
+  const { data: encounters } = await supabase
+    .from("encounters")
+    .select(`
+      id, visit_number, encounter_type, status, urgency,
+      chief_complaint, registered_at, completed_at, triage_at, seen_at,
+      assigned_doctor:staff!assigned_doctor_id(id, first_name, last_name),
+      vitals(id, bp_systolic, bp_diastolic, temperature, pulse_rate, spo2, weight_kg, height_cm, bmi, recorded_at),
+      clinical_notes(id, note_type, subjective, objective, assessment, plan, created_at,
+        author:staff!author_id(first_name, last_name)
+      ),
+      diagnoses(id, name, icd_code, diagnosis_type, certainty, created_at),
+      prescriptions(id, drug_name, strength, form, quantity, frequency, duration, route, instructions, brand, created_at),
+      bills(id, subtotal, patient_owes, status, created_at,
+        bill_payments(amount, payment_method, paid_at)
+      )
+    `)
+    .eq("patient_id", patientId)
+    .order("registered_at", { ascending: false })
+    .limit(limit);
+
+  return { patient: patient ?? null, encounters: encounters ?? [] };
+}
+
 export async function getPatientEncounters(patientId, limit = 10) {
   const { data, error } = await supabase
     .from("encounters")
@@ -534,6 +600,59 @@ export async function checkDrugInteractions(drugIds) {
  * Log an AI event for audit trail.
  * Call this after every Claude API interaction.
  */
+
+/**
+ * Analytics — fetch all data needed for the clinic dashboard.
+ */
+export async function getAnalytics(orgId, days = 30) {
+  const since = new Date(Date.now() - days * 86400000).toISOString();
+  const today = new Date().toISOString().slice(0, 10);
+
+  // Daily encounter counts for the last N days
+  const { data: encounters } = await supabase
+    .from("encounters")
+    .select("id, status, urgency, registered_at, completed_at, assigned_doctor_id, assigned_doctor:staff!assigned_doctor_id(first_name, last_name)")
+    .eq("org_id", orgId)
+    .gte("registered_at", since)
+    .order("registered_at", { ascending: true });
+
+  // Revenue from bills
+  const { data: bills } = await supabase
+    .from("bills")
+    .select("id, subtotal, patient_owes, status, created_at, bill_payments(amount, paid_at)")
+    .eq("org_id", orgId)
+    .gte("created_at", since);
+
+  // Top diagnoses
+  const { data: diagnoses } = await supabase
+    .from("diagnoses")
+    .select("name, icd_code, created_at")
+    .eq("org_id", orgId)
+    .gte("created_at", since);
+
+  // Prescriptions for pharmacy stats
+  const { data: prescriptions } = await supabase
+    .from("prescriptions")
+    .select("drug_name, quantity, created_at")
+    .eq("org_id", orgId)
+    .gte("created_at", since);
+
+  // Staff list for performance
+  const { data: staff } = await supabase
+    .from("staff")
+    .select("id, first_name, last_name, role")
+    .eq("org_id", orgId)
+    .eq("is_active", true);
+
+  return {
+    encounters: encounters || [],
+    bills: bills || [],
+    diagnoses: diagnoses || [],
+    prescriptions: prescriptions || [],
+    staff: staff || [],
+  };
+}
+
 export async function logAiEvent(orgId, eventData) {
   const { error } = await supabase
     .from("ai_events")
@@ -584,4 +703,166 @@ function parseVital(val) {
   if (val === null || val === undefined || val === "") return null;
   const n = parseFloat(String(val).replace(/[^0-9.]/g, ""));
   return isNaN(n) ? null : n;
+}
+
+// ─── APID — Alera Patient ID ──────────────────────────────────────────────────
+
+/**
+ * Generate a unique Alera Patient ID (APID)
+ * Format: APID-XXXXXXXX (8 alphanumeric chars)
+ */
+function generateAPID() {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no 0,O,1,I to avoid confusion
+  let id = "APID-";
+  for (let i = 0; i < 8; i++) id += chars[Math.floor(Math.random() * chars.length)];
+  return id;
+}
+
+/**
+ * Get or create a global patient ID for a patient.
+ * Called at registration — if patient already has one, return it.
+ */
+export async function ensureGlobalPatientId(patientId) {
+  const { data } = await supabase
+    .from("patients")
+    .select("global_patient_id")
+    .eq("id", patientId)
+    .single();
+
+  if (data?.global_patient_id) return data.global_patient_id;
+
+  // Generate new APID
+  const apid = generateAPID();
+  await supabase.from("patients").update({ global_patient_id: apid }).eq("id", patientId);
+  return apid;
+}
+
+/**
+ * Search patients across ALL orgs by name, phone, or APID.
+ * Returns basic demographics only — no clinical data without consent.
+ */
+export async function searchPatientsGlobal(query) {
+  if (!query || query.length < 2) return { data: [] };
+
+  const isAPID = query.toUpperCase().startsWith("APID-");
+
+  if (isAPID) {
+    const { data } = await supabase
+      .from("patients")
+      .select("id, org_id, global_patient_id, first_name, last_name, date_of_birth, biological_sex, phone, patient_number, blood_group, patient_allergies(allergen)")
+      .eq("global_patient_id", query.toUpperCase())
+      .limit(5);
+    return { data: data || [] };
+  }
+
+  // Search by name or phone
+  const { data } = await supabase
+    .from("patients")
+    .select("id, org_id, global_patient_id, first_name, last_name, date_of_birth, biological_sex, phone, patient_number, blood_group, patient_allergies(allergen)")
+    .or(`first_name.ilike.%${query}%,last_name.ilike.%${query}%,phone.ilike.%${query}%`)
+    .not("global_patient_id", "is", null)
+    .limit(10);
+
+  return { data: data || [] };
+}
+
+/**
+ * Request consent to access a patient's records from another org.
+ */
+export async function requestPatientConsent(globalPatientId, requestingOrgId, grantingOrgId, staffId) {
+  const { data, error } = await supabase
+    .from("patient_consents")
+    .insert({
+      global_patient_id: globalPatientId,
+      requesting_org_id: requestingOrgId,
+      granting_org_id:   grantingOrgId,
+      consent_type:      "full",
+      status:            "pending",
+      staff_id:          staffId,
+    })
+    .select()
+    .single();
+  return { data, error };
+}
+
+/**
+ * Grant consent verbally (receptionist confirms patient said yes).
+ */
+export async function grantConsentVerbally(consentId, staffId) {
+  const { data, error } = await supabase
+    .from("patient_consents")
+    .update({
+      status:       "approved",
+      consented_by: "patient_verbal",
+      granted_at:   new Date().toISOString(),
+      expires_at:   new Date(Date.now() + 365 * 86400000).toISOString(), // 1 year
+    })
+    .eq("id", consentId)
+    .select()
+    .single();
+  return { data, error };
+}
+
+/**
+ * Check if requesting org has consent to view a patient's records.
+ */
+export async function checkConsent(globalPatientId, requestingOrgId) {
+  const { data } = await supabase
+    .from("patient_consents")
+    .select("id, status, consent_type, granted_at, expires_at")
+    .eq("global_patient_id", globalPatientId)
+    .eq("requesting_org_id", requestingOrgId)
+    .eq("status", "approved")
+    .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`)
+    .limit(1);
+  return { hasConsent: (data?.length ?? 0) > 0, consent: data?.[0] };
+}
+
+/**
+ * Get full cross-org patient chart (requires consent).
+ */
+export async function getCrossOrgChart(globalPatientId) {
+  const { data: patients } = await supabase
+    .from("patients")
+    .select(`
+      id, org_id, global_patient_id, first_name, last_name,
+      date_of_birth, biological_sex, blood_group, phone,
+      patient_number, pcp_staff_id, pcp_name,
+      patient_allergies(allergen, severity),
+      encounters(
+        id, status, registered_at, chief_complaint,
+        assigned_doctor:staff!assigned_doctor_id(first_name, last_name),
+        vitals(bp_systolic, bp_diastolic, temperature, pulse_rate, spo2, weight_kg),
+        clinical_notes(subjective, objective, assessment, plan, created_at),
+        diagnoses(name, icd_code, diagnosis_type),
+        prescriptions(drug_name, strength, frequency, duration)
+      )
+    `)
+    .eq("global_patient_id", globalPatientId)
+    .order("registered_at", { foreignTable: "encounters", ascending: false });
+
+  return { data: patients || [] };
+}
+
+/**
+ * Set or update a patient's PCP.
+ */
+export async function setPatientPCP(globalPatientId, pcpStaffId, pcpName) {
+  const { error } = await supabase
+    .from("patients")
+    .update({ pcp_staff_id: pcpStaffId, pcp_name: pcpName })
+    .eq("global_patient_id", globalPatientId);
+  return { error };
+}
+
+/**
+ * Log patient record access.
+ */
+export async function logPatientAccess(globalPatientId, orgId, staffId, accessType = "view") {
+  await supabase.from("patient_access_log").insert({
+    global_patient_id: globalPatientId,
+    accessed_by_org:   orgId,
+    accessed_by_staff: staffId,
+    access_type:       accessType,
+  });
 }

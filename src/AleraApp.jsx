@@ -31,11 +31,17 @@ import AleraBillingDashboard     from "./AleraBillingDashboard.jsx";
 import AleraVisitExit            from "./AleraVisitExit.jsx";
 import AleraQueue               from "./AleraQueue.jsx";
 import AleraAdmin               from "./AleraAdmin.jsx";
-import AleraNHIS                from "./AleraNHIS.jsx";
 import AleraDispensingScreen    from "./AleraDispensingScreen.jsx";
+import AleraAnalytics           from "./AleraAnalytics.jsx";
+import AleraNHISClaims          from "./AleraNHISClaims.jsx";
+import AleraRevenueIntelligence from "./AleraRevenueIntelligence.jsx";
+import AleraPatientConsent      from "./AleraPatientConsent.jsx";
+import AleraAppointments        from "./AleraAppointments.jsx";
+import AleraHome                from "./AleraHome.jsx";
+import AleraPatientChart        from "./AleraPatientChart.jsx";
 import { SCREEN_ACCESS }         from "./AleraRoles.js";
 import { useAuth }               from "./AleraAuth.jsx";
-import { upsertPatient, createEncounter, saveVitals, saveNote, saveDiagnoses, savePrescription, createBill, recordPayment, updateEncounterStatus } from "./supabase.js";
+import { supabase, upsertPatient, createEncounter, saveVitals, saveNote, saveDiagnoses, savePrescription, createBill, recordPayment, updateEncounterStatus, ensureGlobalPatientId } from "./supabase.js";
 
 // ─── Demo patient seed ────────────────────────────────────────────────────────
 // Used before a real patient is registered; downstream screens fill in the gaps.
@@ -65,6 +71,7 @@ export default function AleraApp() {
   // ── Auth (real Supabase session) ──────────────────────────────────────────
   const { isAuthenticated, loading: authLoading, signOut, orgId, staffId } = useAuth();
   const [role,         setRole]         = useState(null);
+  const [staffName,    setStaffName]    = useState(null);
   const [activeScreen, setActiveScreen] = useState(null);
 
   // ── DB record IDs — populated as each screen persists to Supabase ─────────
@@ -93,7 +100,14 @@ export default function AleraApp() {
   // ── Login / logout ────────────────────────────────────────────────────────
   function handleLogin(selectedRole, session) {
     setRole(selectedRole);
-    setActiveScreen(SCREEN_ACCESS[selectedRole]?.[0] || "queue");
+    setActiveScreen("home");
+    // Extract staff name from JWT claims
+    try {
+      const payload = JSON.parse(atob(session.access_token.split(".")[1]));
+      const fn = payload.first_name || "";
+      const ln = payload.last_name  || "";
+      if (fn || ln) setStaffName([fn, ln].filter(Boolean).join(" "));
+    } catch {}
     setPatient(BLANK_PATIENT);
     setEncounterId(null);
     setNoteId(null);
@@ -147,6 +161,8 @@ export default function AleraApp() {
 
     // Only create encounter if patient has a real DB UUID (not a local_ id)
     if (!saved.id.startsWith("local_")) {
+      // Generate APID if patient doesn't have one
+      await ensureGlobalPatientId(saved.id);
       await createEncounter(
         saved.id, orgId, staffId,
         { chief_complaint: form.visitReason, encounter_type: "outpatient" }
@@ -205,6 +221,7 @@ export default function AleraApp() {
 
   async function handleNotesComplete(data) {
     if (data?._lookup) { setPatient(prev => ({ ...prev, ...data.patient })); return; }
+    if (data?._bookAppointment) { setActiveScreen("appointments"); return; }
     // data shape from AleraClinicalNoteEditor: { soap, diagnosis, icdCodes, discharge }
     if (data) {
       // Persist SOAP note + diagnoses
@@ -220,9 +237,10 @@ export default function AleraApp() {
         }
       }
       mergePatient({
-        soap:      data.soap      || patient.soap,
-        diagnosis: data.diagnosis || patient.diagnosis,
-        icdCodes:  data.icdCodes  || patient.icdCodes,
+        soap:           data.soap           || patient.soap,
+        diagnosis:      data.diagnosis      || patient.diagnosis,
+        icdCodes:       data.icdCodes       || patient.icdCodes,
+        aiPrescriptions: data.aiPrescriptions || patient.aiPrescriptions || [],
       });
 
       // Doctor sign-off: update encounter status and auto-generate bill
@@ -297,6 +315,13 @@ export default function AleraApp() {
     }
 
     // Cashier mode — payment collected, close visit
+    // Auto-tag bill with NHIS number if patient has one
+    if (encounterId && patient.insuranceId) {
+      await supabase.from("bills").update({
+        nhis_number: patient.insuranceId,
+        nhis_claim_status: "draft",
+      }).eq("encounter_id", encounterId);
+    }
     mergePatient({
       amountPaid:    data?.amountPaid    ?? 0,
       paymentMethod: data?.paymentMethod ?? "Cash",
@@ -365,6 +390,7 @@ export default function AleraApp() {
           <AleraQueue
             onStartEncounter={() => setActiveScreen("registration")}
             onSeePatient={["doctor", "nurse", "admin", "pharmacist", "cashier", "receptionist"].includes(role) ? handleSeePatient : undefined}
+            onViewChart={(patientId) => { setPatient(prev => ({ ...prev, _db_id: patientId })); setActiveScreen("chart"); }}
           />
         );
 
@@ -372,7 +398,7 @@ export default function AleraApp() {
         return <AleraAdmin />;
 
       case "nhis":
-        return <AleraNHIS />;
+        return <AleraNHISClaims />;
 
       case "dispensing":
         return (
@@ -387,6 +413,46 @@ export default function AleraApp() {
           <AleraBillingDashboard
             patient={patient}
             onComplete={handleBillingComplete}
+          />
+        );
+
+      case "home":
+        return (
+          <AleraHome
+            role={role}
+            staffName={staffName}
+            orgId={orgId}
+            onGoToQueue={() => setActiveScreen("queue")}
+            onRegister={() => setActiveScreen("registration")}
+            onAnalytics={() => setActiveScreen("analytics")}
+            onAppointments={() => setActiveScreen("appointments")}
+          />
+        );
+
+      case "appointments":
+        return <AleraAppointments />;
+
+      case "analytics":
+        return <AleraAnalytics />;
+
+      case "revenue":
+        return <AleraRevenueIntelligence />;
+
+      case "consent":
+        return (
+          <AleraPatientConsent
+            onSelectPatient={(p) => {
+              setPatient(prev => ({ ...prev, ...p, _db_id: p.id }));
+              setActiveScreen("chart");
+            }}
+          />
+        );
+
+      case "chart":
+        return (
+          <AleraPatientChart
+            patientId={patient._db_id}
+            onClose={() => setActiveScreen("queue")}
           />
         );
 

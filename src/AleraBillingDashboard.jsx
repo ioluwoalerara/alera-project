@@ -113,6 +113,47 @@ Thank you. Get well soon.
 Powered by Alera Health EMR`;
 }
 
+function printReceipt(receiptText, patientName) {
+  const win = window.open("", "_blank", "width=400,height=600");
+  if (!win) { alert("Please allow popups to print receipts"); return; }
+  win.document.write(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>Receipt - ${patientName}</title>
+      <style>
+        body { font-family: 'Courier New', monospace; font-size: 12px; margin: 20px; color: #000; }
+        pre { white-space: pre-wrap; word-break: break-word; line-height: 1.8; }
+        .print-btn { display: block; margin: 20px auto; padding: 10px 20px; background: #1A6650; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; }
+        @media print { .print-btn { display: none; } }
+      </style>
+    </head>
+    <body>
+      <pre>${receiptText}</pre>
+      <button class="print-btn" onclick="window.print()">🖨 Print Receipt</button>
+    </body>
+    </html>
+  `);
+  win.document.close();
+  setTimeout(() => win.print(), 500);
+}
+
+function downloadReceipt(receiptText, patientName) {
+  const blob = new Blob([receiptText], { type: "text/plain" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `Alera-Receipt-${patientName.replace(/\s/g, "-")}-${Date.now()}.txt`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function copyReceiptToClipboard(receiptText) {
+  navigator.clipboard.writeText(receiptText).then(() => {
+    alert("Receipt copied to clipboard — paste into WhatsApp or SMS to send to patient");
+  });
+}
+
 function generateCloseReport(summary, counted, staff, ts) {
   const diff   = counted - summary.expectedCash;
   const status = diff === 0 ? "BALANCED" : diff > 0 ? `OVERAGE +₦${Math.abs(diff).toLocaleString()}` : `SHORTAGE -₦${Math.abs(diff).toLocaleString()}`;
@@ -517,7 +558,27 @@ export default function AleraBillingDashboard({ patient, onComplete }) {
               💰 Cashier — Collect Payment
             </div>
           )}
-          {paid && <Tag color={T.sage} bg={T.sageLight}>✓ PAID · {fmt(totals.patientOwes)}</Tag>}
+          {paid && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Tag color={T.sage} bg={T.sageLight}>✓ PAID · {fmt(totals.patientOwes)}</Tag>
+                <button
+                  onClick={() => printReceipt(receipt, patient.name || 'Patient')}
+                  style={{
+                    padding: '4px 12px', borderRadius: 6, border: 'none',
+                    background: T.sage, color: '#fff', fontSize: 11, fontWeight: 700,
+                    cursor: 'pointer', fontFamily: "'Syne',sans-serif",
+                  }}
+                >🖨 Print</button>
+                <button
+                  onClick={() => copyReceiptToClipboard(receipt)}
+                  style={{
+                    padding: '4px 12px', borderRadius: 6, border: `1px solid ${T.sageBorder}`,
+                    background: T.sageLight, color: T.sage, fontSize: 11, fontWeight: 700,
+                    cursor: 'pointer', fontFamily: "'Syne',sans-serif",
+                  }}
+                >📋 Copy</button>
+              </div>
+            )}
           <span style={{ fontSize: 11.5, color: T.inkSub, fontFamily: "'JetBrains Mono',monospace" }}>{items.filter(i => i.active).length} items · {fmt(totals.subtotal)}</span>
         </div>
       </header>
@@ -782,8 +843,9 @@ export default function AleraBillingDashboard({ patient, onComplete }) {
           <div>
             <div style={{ fontSize: 10, color: "rgba(255,255,255,0.5)", fontFamily: "'JetBrains Mono',monospace", letterSpacing: "0.6px", marginBottom: 12 }}>RECEIPT DELIVERY</div>
             {[
-              { icon: "📨", label: "SMS Receipt",  sub: patient.phone,  action: () => { setSmsSent(true); setTimeout(() => setSmsSent(false), 3000); }, sent: smsSent   },
-              { icon: "📧", label: "Email Receipt", sub: patient.email,  action: () => { setEmailSent(true); setTimeout(() => setEmailSent(false), 3000); }, sent: emailSent },
+              { icon: "🖨", label: "Print Receipt",    sub: "Opens print dialog",         action: () => printReceipt(receipt, patient.name),            sent: false },
+              { icon: "⬇", label: "Download Receipt",  sub: "Save as text file",           action: () => downloadReceipt(receipt, patient.name),         sent: false },
+              { icon: "📋", label: "Copy for WhatsApp", sub: patient.phone || "Copy text",  action: () => copyReceiptToClipboard(receipt),                sent: false },
               { icon: "🖨", label: "Print",         sub: "A5 thermal",   action: () => {},                                                                  sent: false     },
             ].map((d, i) => (
               <button key={i} onClick={d.action} style={{ width: "100%", padding: "10px 14px", borderRadius: T.radiusSm, marginBottom: 7, border: `1px solid ${d.sent ? "rgba(26,102,80,0.4)" : "rgba(255,255,255,0.07)"}`, background: d.sent ? "rgba(26,102,80,0.14)" : "rgba(255,255,255,0.04)", cursor: "pointer", fontFamily: "'DM Sans',sans-serif", display: "flex", alignItems: "center", gap: 10, transition: "all 0.14s", textAlign: "left" }}
