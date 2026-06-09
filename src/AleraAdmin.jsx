@@ -1,235 +1,286 @@
-// =============================================================================
-// AleraAdmin.jsx — Admin Dashboard: Staff Management + Org Stats
-// =============================================================================
-// Two sections:
-//   1. Org stats — today's visit count, revenue, queue depth, top diagnoses
-//   2. Staff management — list staff, create accounts, deactivate, reset passwords
-//
-// All writes go through Supabase (service role operations are done via
-// Edge Functions — the frontend only does what the anon key permits).
-// =============================================================================
-
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "./AleraAuth.jsx";
-import { supabase } from "./supabase.js";
+import { getOrgStaff, inviteStaffMember, updateStaffMember, deactivateStaff } from "./supabase.js";
 
+// ─── Design Tokens ────────────────────────────────────────────────────────────
 const T = {
-  ink:       "#0D1117", inkSub: "#6E7891", inkMid: "#3D4558",
-  paper:     "#F7F5F1", paperDim: "#EFECE7", white: "#FFFFFF",
-  sage:      "#1A6650", sageMid: "#237A5F", sageLight: "#E6F3EE", sageBorder: "rgba(26,102,80,0.2)",
-  amber:     "#C97A10", amberLight: "#FEF5E7",
-  rose:      "#B83232", roseLight: "#FDECEA", roseBorder: "rgba(184,50,50,0.3)",
-  blue:      "#1854A8", blueLight: "#E8F0FB",
-  border:    "#E8E4DE", borderMid: "#D4D0CA",
-  shadow:    "0 1px 3px rgba(13,17,23,0.06), 0 4px 16px rgba(13,17,23,0.04)",
+  ink: "#0D1117", inkSub: "#6E7891", inkMid: "#3D4558",
+  paper: "#F7F5F1", paperDim: "#EFECE7", white: "#FFFFFF",
+  sage: "#1A6650", sageMid: "#237A5F", sageLight: "#E6F3EE", sageBorder: "rgba(26,102,80,0.2)",
+  blue: "#1854A8", blueLight: "#E8F0FB",
+  amber: "#C97A10", amberLight: "#FEF5E7",
+  rose: "#B83232", roseLight: "#FDECEA",
+  purple: "#5E3FAE", purpleLight: "#F0EBFF",
+  border: "#E8E4DE", borderMid: "#D4D0CA",
+  shadow: "0 1px 3px rgba(13,17,23,0.06), 0 4px 16px rgba(13,17,23,0.04)",
   radius: 12, radiusSm: 8, radiusLg: 16,
 };
 
+const ROLES = [
+  { value: "doctor",       label: "Doctor",       icon: "🩺", desc: "Clinical notes, prescriptions, sign-off" },
+  { value: "nurse",        label: "Nurse",         icon: "💉", desc: "Triage, vitals, patient assessment" },
+  { value: "receptionist", label: "Receptionist",  icon: "🖥️", desc: "Registration, queue, appointments" },
+  { value: "cashier",      label: "Cashier",       icon: "💰", desc: "Billing, payment collection" },
+  { value: "pharmacist",   label: "Pharmacist",    icon: "💊", desc: "Drug dispensing, pharmacy" },
+  { value: "admin",        label: "Admin",         icon: "⚙️", desc: "Full access, staff management" },
+];
+
 const ROLE_COLORS = {
-  doctor:      { c: T.sage,   bg: T.sageLight  },
-  nurse:       { c: T.blue,   bg: T.blueLight  },
-  pharmacist:  { c: "#5E3FAE",bg: "#F0EBFF"    },
-  receptionist:{ c: T.amber,  bg: T.amberLight },
-  cashier:     { c: "#6B7080",bg: T.paperDim   },
-  admin:       { c: T.rose,   bg: T.roseLight  },
-  super_admin: { c: T.rose,   bg: T.roseLight  },
+  doctor:       { color: T.sage,   bg: T.sageLight },
+  nurse:        { color: T.blue,   bg: T.blueLight },
+  receptionist: { color: T.purple, bg: T.purpleLight },
+  cashier:      { color: T.amber,  bg: T.amberLight },
+  pharmacist:   { color: T.purple, bg: T.purpleLight },
+  admin:        { color: T.ink,    bg: T.paperDim },
 };
 
-const ALL_ROLES = ["doctor","nurse","pharmacist","receptionist","cashier","admin"];
-
-const fmt = v => "₦" + Math.round(v ?? 0).toLocaleString("en-NG");
-
-// ─── Stat card ────────────────────────────────────────────────────────────────
-function StatCard({ label, value, sub, icon, color = T.sage, bg = T.sageLight }) {
-  return (
-    <div style={{ padding: "18px 20px", background: T.white, borderRadius: T.radius, border: `1px solid ${T.border}`, boxShadow: T.shadow }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-        <div>
-          <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: 800, fontSize: 28, color, lineHeight: 1 }}>{value}</div>
-          <div style={{ fontSize: 12, color: T.inkSub, marginTop: 6, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.4px" }}>{label}</div>
-          {sub && <div style={{ fontSize: 12, color: T.inkSub, marginTop: 3 }}>{sub}</div>}
-        </div>
-        <div style={{ width: 40, height: 40, borderRadius: 10, background: bg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>{icon}</div>
-      </div>
-    </div>
-  );
+function fmtDate(d) {
+  if (!d) return "Never";
+  return new Date(d).toLocaleDateString("en-NG", { day: "numeric", month: "short", year: "numeric" });
 }
 
-// ─── Staff row ────────────────────────────────────────────────────────────────
-function StaffRow({ member, onToggleActive }) {
-  const [hov, setHov] = useState(false);
-  const roleStyle = ROLE_COLORS[member.role] ?? { c: T.inkSub, bg: T.paperDim };
+// ─── Invite Modal ─────────────────────────────────────────────────────────────
+function InviteModal({ orgId, onClose, onSuccess }) {
+  const [form, setForm] = useState({ firstName: "", lastName: "", email: "", role: "doctor", phone: "" });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [success, setSuccess] = useState(false);
 
-  return (
-    <div
-      onMouseEnter={() => setHov(true)}
-      onMouseLeave={() => setHov(false)}
-      style={{
-        display: "grid",
-        gridTemplateColumns: "1fr 110px 140px 120px 100px",
-        alignItems: "center", gap: 12,
-        padding: "13px 18px",
-        background: hov ? "#FAFAF8" : T.white,
-        borderBottom: `1px solid ${T.border}`,
-        transition: "background 0.12s",
-        opacity: member.is_active ? 1 : 0.5,
-      }}
-    >
-      {/* Name + email */}
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <div style={{
-          width: 34, height: 34, borderRadius: "50%",
-          background: member.is_active ? T.sageLight : T.paperDim,
-          border: `1.5px solid ${member.is_active ? T.sageBorder : T.border}`,
-          display: "flex", alignItems: "center", justifyContent: "center",
-          fontFamily: "'Syne',sans-serif", fontWeight: 800, fontSize: 12,
-          color: member.is_active ? T.sage : T.inkSub, flexShrink: 0,
-        }}>
-          {`${member.first_name?.[0] ?? ""}${member.last_name?.[0] ?? ""}`.toUpperCase()}
-        </div>
-        <div>
-          <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: 700, fontSize: 13.5, color: T.ink }}>
-            {member.first_name} {member.last_name}
-          </div>
-          <div style={{ fontSize: 11, color: T.inkSub, fontFamily: "'JetBrains Mono',monospace" }}>
-            {member.email ?? "No email set"}
-          </div>
-        </div>
-      </div>
-
-      {/* Role badge */}
-      <span style={{
-        fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 6,
-        background: roleStyle.bg, color: roleStyle.c,
-        fontFamily: "'JetBrains Mono',monospace", display: "inline-block",
-      }}>
-        {member.role}
-      </span>
-
-      {/* Speciality */}
-      <div style={{ fontSize: 12, color: T.inkMid }}>{member.speciality ?? "—"}</div>
-
-      {/* MDCN / PCN */}
-      <div style={{ fontSize: 11, color: T.inkSub, fontFamily: "'JetBrains Mono',monospace" }}>
-        {member.mdcn_number ?? member.pcn_number ?? "—"}
-      </div>
-
-      {/* Active toggle */}
-      <div style={{ display: "flex", justifyContent: "flex-end" }}>
-        <button onClick={() => onToggleActive(member)} style={{
-          padding: "5px 12px", borderRadius: 6, fontSize: 11, fontWeight: 700,
-          background: member.is_active ? T.roseLight : T.sageLight,
-          color: member.is_active ? T.rose : T.sage,
-          border: `1px solid ${member.is_active ? T.roseBorder : T.sageBorder}`,
-          cursor: "pointer", transition: "all 0.14s",
-          fontFamily: "'DM Sans',sans-serif",
-        }}>
-          {member.is_active ? "Deactivate" : "Reactivate"}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// ─── AddStaffModal ────────────────────────────────────────────────────────────
-function AddStaffModal({ orgId, onClose, onAdded }) {
-  const [form, setForm] = useState({ first_name: "", last_name: "", email: "", role: "doctor", speciality: "", mdcn_number: "", pcn_number: "" });
-  const [saving, setSaving] = useState(false);
-  const [error,  setError]  = useState(null);
-  const [done,   setDone]   = useState(false);
-
-  function setF(k, v) { setForm(f => ({ ...f, [k]: v })); }
-
-  async function handleSubmit() {
-    if (!form.first_name.trim() || !form.last_name.trim() || !form.email.trim()) {
-      setError("First name, last name, and email are required.");
+  async function handleInvite() {
+    if (!form.firstName || !form.lastName || !form.email || !form.role) {
+      setError("Please fill in all required fields.");
       return;
     }
-    setSaving(true);
+    setLoading(true);
     setError(null);
 
-    // Insert staff record — auth user must be linked manually by admin
-    // (Or via Supabase dashboard: Auth → Users → Add User, then link UUID)
-    const { error: insertErr } = await supabase
-      .from("staff")
-      .insert({
+    // Since admin.inviteUserByEmail requires service role key (not available client-side),
+    // we use a workaround: create auth user with a temp password and send reset email
+    const { supabase } = await import("./supabase.js");
+
+    try {
+      // Create auth user via signup with temp password
+      const tempPassword = Math.random().toString(36).slice(-12) + "A1!";
+      const { data: signupData, error: signupError } = await supabase.auth.signUp({
+        email: form.email,
+        password: tempPassword,
+        options: {
+          data: { first_name: form.firstName, last_name: form.lastName },
+        },
+      });
+
+      if (signupError) { setError(signupError.message); setLoading(false); return; }
+
+      // Create staff record
+      const { error: staffError } = await supabase.from("staff").insert({
         org_id:       orgId,
-        first_name:   form.first_name.trim(),
-        last_name:    form.last_name.trim(),
-        email:        form.email.trim().toLowerCase(),
+        auth_user_id: signupData.user.id,
+        email:        form.email,
+        first_name:   form.firstName,
+        last_name:    form.lastName,
         role:         form.role,
-        speciality:   form.speciality.trim() || null,
-        mdcn_number:  form.mdcn_number.trim() || null,
-        pcn_number:   form.pcn_number.trim()  || null,
+        phone:        form.phone || null,
         is_active:    true,
       });
 
-    setSaving(false);
-    if (insertErr) {
-      setError(insertErr.message);
-      return;
+      if (staffError) { setError(staffError.message); setLoading(false); return; }
+
+      // Send password reset email so they can set their own password
+      await supabase.auth.resetPasswordForEmail(form.email, {
+        redirectTo: `${window.location.origin}/?setup=true`,
+      });
+
+      setSuccess(true);
+      setTimeout(() => { onSuccess(); onClose(); }, 2000);
+    } catch (e) {
+      setError(e.message);
     }
-    setDone(true);
-    onAdded?.();
+    setLoading(false);
   }
 
   return (
     <div style={{
-      position: "fixed", inset: 0, background: "rgba(13,17,23,0.5)", backdropFilter: "blur(4px)",
-      display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200,
-    }} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      position: "fixed", inset: 0, background: "rgba(13,17,23,0.6)",
+      display: "flex", alignItems: "center", justifyContent: "center",
+      zIndex: 1000, padding: 20,
+    }}>
       <div style={{
-        background: T.white, borderRadius: T.radiusLg, width: "100%", maxWidth: 480,
-        padding: "28px 28px", boxShadow: "0 20px 60px rgba(13,17,23,0.25)",
-        animation: "fadeUp 0.2s ease",
+        background: T.white, borderRadius: T.radiusLg, width: "100%", maxWidth: 500,
+        boxShadow: "0 24px 64px rgba(13,17,23,0.2)", fontFamily: "'DM Sans',sans-serif",
       }}>
-        <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: 800, fontSize: 18, color: T.ink, marginBottom: 4 }}>
-          Add Staff Member
-        </div>
-        <div style={{ fontSize: 13, color: T.inkSub, marginBottom: 22 }}>
-          Creates a staff record. After saving, go to Supabase Dashboard → Auth → Users to create their login credentials and link the account.
+        <div style={{ padding: "20px 24px", borderBottom: `1px solid ${T.border}`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div>
+            <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: 800, fontSize: 18, color: T.ink }}>Invite Staff Member</div>
+            <div style={{ fontSize: 12, color: T.inkSub, marginTop: 2 }}>They'll receive an email to set their password</div>
+          </div>
+          <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: T.inkSub }}>✕</button>
         </div>
 
-        {done ? (
-          <div style={{ textAlign: "center", padding: "24px 0" }}>
+        {success ? (
+          <div style={{ padding: "40px 24px", textAlign: "center" }}>
             <div style={{ fontSize: 40, marginBottom: 12 }}>✅</div>
-            <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: 700, fontSize: 16, color: T.ink, marginBottom: 6 }}>Staff record created</div>
-            <div style={{ fontSize: 13, color: T.inkSub, marginBottom: 20 }}>
-              Go to Supabase Dashboard → Authentication → Users → Invite User ({form.email}) to send them a login link.
-            </div>
-            <button onClick={onClose} style={{ padding: "10px 24px", background: T.sage, color: "#fff", border: "none", borderRadius: T.radiusSm, cursor: "pointer", fontFamily: "'Syne',sans-serif", fontWeight: 700 }}>Done</button>
+            <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: 700, fontSize: 16, color: T.ink, marginBottom: 4 }}>Invitation Sent</div>
+            <div style={{ fontSize: 13, color: T.inkSub }}>{form.email} will receive a setup email shortly</div>
           </div>
         ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <Field label="First Name *" value={form.first_name} onChange={v => setF("first_name", v)} placeholder="Chidi" />
-              <Field label="Last Name *"  value={form.last_name}  onChange={v => setF("last_name", v)}  placeholder="Okonkwo" />
-            </div>
-            <Field label="Work Email *" value={form.email} onChange={v => setF("email", v)} placeholder="chidi@clinic.ng" type="email" />
-            <div>
-              <label style={LABEL}>Role *</label>
-              <select value={form.role} onChange={e => setF("role", e.target.value)} style={INPUT}>
-                {ALL_ROLES.map(r => <option key={r} value={r}>{r.charAt(0).toUpperCase() + r.slice(1)}</option>)}
-              </select>
-            </div>
-            <Field label="Speciality" value={form.speciality} onChange={v => setF("speciality", v)} placeholder="General Practice" />
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <Field label="MDCN Number" value={form.mdcn_number} onChange={v => setF("mdcn_number", v)} placeholder="MD/2023/12345" />
-              <Field label="PCN / NMCN" value={form.pcn_number} onChange={v => setF("pcn_number", v)} placeholder="PCN-12345" />
-            </div>
+          <>
+            <div style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: 14 }}>
 
-            {error && (
-              <div style={{ padding: "10px 14px", borderRadius: 8, background: T.roseLight, border: `1px solid ${T.roseBorder}`, color: T.rose, fontSize: 13 }}>
-                ⚠️ {error}
+              {error && (
+                <div style={{ padding: "10px 14px", background: T.roseLight, border: `1px solid rgba(184,50,50,0.2)`, borderRadius: T.radiusSm, fontSize: 13, color: T.rose }}>
+                  ⚠ {error}
+                </div>
+              )}
+
+              {/* Name */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: T.inkSub, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>First Name *</div>
+                  <input value={form.firstName} onChange={e => setForm(f => ({ ...f, firstName: e.target.value }))}
+                    placeholder="Chidi" style={{ width: "100%", padding: "10px 14px", border: `1px solid ${T.border}`, borderRadius: T.radiusSm, fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+                </div>
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: T.inkSub, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Last Name *</div>
+                  <input value={form.lastName} onChange={e => setForm(f => ({ ...f, lastName: e.target.value }))}
+                    placeholder="Okonkwo" style={{ width: "100%", padding: "10px 14px", border: `1px solid ${T.border}`, borderRadius: T.radiusSm, fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+                </div>
               </div>
-            )}
 
-            <div style={{ display: "flex", gap: 10, marginTop: 6 }}>
-              <button onClick={onClose} style={{ flex: 1, padding: "11px 0", borderRadius: T.radiusSm, background: T.white, border: `1.5px solid ${T.border}`, color: T.inkMid, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", fontWeight: 600 }}>Cancel</button>
-              <button onClick={handleSubmit} disabled={saving} style={{ flex: 2, padding: "11px 0", borderRadius: T.radiusSm, background: saving ? T.sageMid : T.sage, border: "none", color: "#fff", cursor: saving ? "default" : "pointer", fontFamily: "'Syne',sans-serif", fontWeight: 700 }}>
-                {saving ? "Saving…" : "Create Staff Record"}
-              </button>
+              {/* Email */}
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: T.inkSub, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Email Address *</div>
+                <input type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
+                  placeholder="doctor@clinic.ng" style={{ width: "100%", padding: "10px 14px", border: `1px solid ${T.border}`, borderRadius: T.radiusSm, fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+              </div>
+
+              {/* Phone */}
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: T.inkSub, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Phone (optional)</div>
+                <input value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
+                  placeholder="+234 803 000 0000" style={{ width: "100%", padding: "10px 14px", border: `1px solid ${T.border}`, borderRadius: T.radiusSm, fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+              </div>
+
+              {/* Role */}
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: T.inkSub, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>Role *</div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                  {ROLES.map(r => (
+                    <button key={r.value} onClick={() => setForm(f => ({ ...f, role: r.value }))} style={{
+                      padding: "10px 12px", borderRadius: T.radiusSm, cursor: "pointer", textAlign: "left",
+                      border: `1.5px solid ${form.role === r.value ? T.sage : T.border}`,
+                      background: form.role === r.value ? T.sageLight : T.white,
+                      transition: "all 0.15s",
+                    }}>
+                      <div style={{ fontSize: 16, marginBottom: 3 }}>{r.icon}</div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: form.role === r.value ? T.sage : T.ink }}>{r.label}</div>
+                      <div style={{ fontSize: 10, color: T.inkSub, marginTop: 1 }}>{r.desc}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
+
+            <div style={{ padding: "16px 24px", borderTop: `1px solid ${T.border}`, display: "flex", gap: 10 }}>
+              <button onClick={handleInvite} disabled={loading} style={{
+                flex: 1, padding: "12px", background: T.sage, color: "#fff", border: "none",
+                borderRadius: T.radiusSm, fontSize: 14, fontWeight: 700,
+                cursor: loading ? "default" : "pointer", fontFamily: "'Syne',sans-serif",
+              }}>
+                {loading ? "Sending invite…" : "📧 Send Invite"}
+              </button>
+              <button onClick={onClose} style={{
+                padding: "12px 20px", border: `1px solid ${T.border}`, background: T.white,
+                color: T.inkSub, borderRadius: T.radiusSm, fontSize: 14, cursor: "pointer",
+              }}>Cancel</button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Staff Card ───────────────────────────────────────────────────────────────
+function StaffCard({ member, onToggleActive, onEditRole }) {
+  const [showMenu, setShowMenu] = useState(false);
+  const rc = ROLE_COLORS[member.role] || ROLE_COLORS.admin;
+  const roleInfo = ROLES.find(r => r.value === member.role);
+
+  return (
+    <div style={{
+      background: T.white, borderRadius: T.radius, padding: "16px 18px",
+      border: `1px solid ${member.is_active ? T.border : T.borderMid}`,
+      opacity: member.is_active ? 1 : 0.6, boxShadow: T.shadow,
+      display: "flex", alignItems: "center", gap: 14,
+    }}>
+      {/* Avatar */}
+      <div style={{
+        width: 44, height: 44, borderRadius: "50%", flexShrink: 0,
+        background: member.is_active ? T.sage : T.paperDim,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        fontFamily: "'Syne',sans-serif", fontWeight: 800, fontSize: 16,
+        color: member.is_active ? "#fff" : T.inkSub,
+      }}>
+        {[member.first_name?.[0], member.last_name?.[0]].filter(Boolean).join("").toUpperCase() || "?"}
+      </div>
+
+      {/* Info */}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3, flexWrap: "wrap" }}>
+          <span style={{ fontFamily: "'Syne',sans-serif", fontWeight: 700, fontSize: 14, color: T.ink }}>
+            {[member.first_name, member.last_name].filter(Boolean).join(" ") || "—"}
+          </span>
+          <span style={{
+            fontSize: 10, padding: "2px 8px", borderRadius: 10, fontWeight: 700,
+            color: rc.color, background: rc.bg, fontFamily: "'Syne',sans-serif",
+          }}>{roleInfo?.icon} {roleInfo?.label || member.role}</span>
+          {!member.is_active && (
+            <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 10, color: T.rose, background: T.roseLight, fontWeight: 700 }}>Inactive</span>
+          )}
+        </div>
+        <div style={{ fontSize: 12, color: T.inkSub, display: "flex", gap: 12, flexWrap: "wrap" }}>
+          <span>{member.email}</span>
+          {member.phone && <span>{member.phone}</span>}
+          <span>Last login: {fmtDate(member.last_login_at)}</span>
+        </div>
+      </div>
+
+      {/* Actions */}
+      <div style={{ position: "relative", flexShrink: 0 }}>
+        <button onClick={() => setShowMenu(m => !m)} style={{
+          padding: "6px 12px", borderRadius: T.radiusSm, border: `1px solid ${T.border}`,
+          background: T.white, color: T.inkSub, fontSize: 13, cursor: "pointer",
+        }}>⋯</button>
+        {showMenu && (
+          <div style={{
+            position: "absolute", right: 0, top: "calc(100% + 4px)",
+            background: T.white, border: `1px solid ${T.border}`,
+            borderRadius: T.radiusSm, boxShadow: T.shadow,
+            zIndex: 10, minWidth: 160, overflow: "hidden", padding: 4,
+          }}>
+            {ROLES.filter(r => r.value !== member.role).map(r => (
+              <button key={r.value} onClick={() => { onEditRole(member.id, r.value); setShowMenu(false); }} style={{
+                width: "100%", padding: "8px 14px", border: "none", background: "transparent",
+                cursor: "pointer", textAlign: "left", fontSize: 13, color: T.inkMid,
+                display: "flex", alignItems: "center", gap: 8, borderRadius: 6,
+              }}
+                onMouseEnter={e => e.currentTarget.style.background = T.paperDim}
+                onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+              >
+                <span>{r.icon}</span> Change to {r.label}
+              </button>
+            ))}
+            <div style={{ height: 1, background: T.border, margin: "4px 0" }} />
+            <button onClick={() => { onToggleActive(member.id, !member.is_active); setShowMenu(false); }} style={{
+              width: "100%", padding: "8px 14px", border: "none", background: "transparent",
+              cursor: "pointer", textAlign: "left", fontSize: 13,
+              color: member.is_active ? T.rose : T.sage, borderRadius: 6,
+            }}
+              onMouseEnter={e => e.currentTarget.style.background = T.paperDim}
+              onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+            >
+              {member.is_active ? "🚫 Deactivate" : "✅ Reactivate"}
+            </button>
           </div>
         )}
       </div>
@@ -237,195 +288,179 @@ function AddStaffModal({ orgId, onClose, onAdded }) {
   );
 }
 
-function Field({ label, value, onChange, placeholder, type = "text" }) {
-  return (
-    <div>
-      <label style={LABEL}>{label}</label>
-      <input type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
-        style={INPUT}
-        onFocus={e => e.target.style.borderColor = T.sage}
-        onBlur={e  => e.target.style.borderColor = T.border}
-      />
-    </div>
-  );
-}
-
-const LABEL = { display: "block", fontSize: 11, fontWeight: 700, color: T.inkSub, marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.4px" };
-const INPUT = { width: "100%", padding: "10px 12px", background: T.white, border: `1.5px solid ${T.border}`, borderRadius: T.radiusSm, fontSize: 13.5, fontFamily: "'DM Sans',sans-serif", color: T.ink, outline: "none", transition: "border-color 0.14s", boxSizing: "border-box" };
-
-// ─── Main Component ───────────────────────────────────────────────────────────
+// ─── Main Component ────────────────────────────────────────────────────────────
 export default function AleraAdmin() {
-  const { orgId, orgName } = useAuth();
+  const { orgId } = useAuth?.() || {};
 
-  const [tab,         setTab]         = useState("staff");
-  const [staff,       setStaff]       = useState([]);
-  const [staffLoading,setStaffLoading]= useState(true);
-  const [stats,       setStats]       = useState(null);
-  const [showAdd,     setShowAdd]     = useState(false);
-  const [roleFilter,  setRoleFilter]  = useState("all");
+  const [staff, setStaff]         = useState([]);
+  const [loading, setLoading]     = useState(true);
+  const [showInvite, setShowInvite] = useState(false);
+  const [search, setSearch]       = useState("");
+  const [filterRole, setFilterRole] = useState("all");
+  const [activeTab, setActiveTab] = useState("staff");
 
-  // ── Load staff ─────────────────────────────────────────────────────────────
-  async function loadStaff() {
+  const loadStaff = useCallback(async () => {
     if (!orgId) return;
-    const { data } = await supabase
-      .from("staff")
-      .select("id, first_name, last_name, email, role, speciality, mdcn_number, pcn_number, nmcn_number, is_active, created_at")
-      .eq("org_id", orgId)
-      .order("role")
-      .order("last_name");
-    setStaff(data ?? []);
-    setStaffLoading(false);
-  }
+    setLoading(true);
+    const { data } = await getOrgStaff(orgId);
+    setStaff(data);
+    setLoading(false);
+  }, [orgId]);
 
-  // ── Load today's stats ─────────────────────────────────────────────────────
-  async function loadStats() {
-    if (!orgId) return;
-    const today = new Date(); today.setHours(0,0,0,0);
+  useEffect(() => { loadStaff(); }, [loadStaff]);
 
-    const [{ count: totalVisits }, { data: billData }, { data: encData }] = await Promise.all([
-      supabase.from("encounters").select("id", { count: "exact", head: true }).eq("org_id", orgId).gte("registered_at", today.toISOString()),
-      supabase.from("bills").select("amount_paid_ngn, status").eq("org_id", orgId).gte("created_at", today.toISOString()),
-      supabase.from("encounters").select("status, urgency").eq("org_id", orgId).gte("registered_at", today.toISOString()),
-    ]);
-
-    const revenue = (billData ?? []).filter(b => b.status === "paid").reduce((s, b) => s + (b.amount_paid_ngn ?? 0), 0);
-    const pending  = (billData ?? []).filter(b => b.status === "open").length;
-    const critical = (encData ?? []).filter(e => ["immediate","emergent"].includes(e.urgency)).length;
-    const active   = (encData ?? []).filter(e => !["completed","discharged","did_not_wait"].includes(e.status)).length;
-
-    setStats({ totalVisits: totalVisits ?? 0, revenue, pending, critical, active });
-  }
-
-  useEffect(() => { loadStaff(); loadStats(); }, [orgId]);
-
-  async function handleToggleActive(member) {
-    await supabase.from("staff").update({ is_active: !member.is_active }).eq("id", member.id);
+  async function handleToggleActive(staffId, active) {
+    await updateStaffMember(staffId, { is_active: active });
     loadStaff();
   }
 
-  const filteredStaff = roleFilter === "all" ? staff : staff.filter(s => s.role === roleFilter);
+  async function handleEditRole(staffId, newRole) {
+    await updateStaffMember(staffId, { role: newRole });
+    loadStaff();
+  }
 
-  const roleCounts = ALL_ROLES.reduce((acc, r) => {
-    acc[r] = staff.filter(s => s.role === r && s.is_active).length;
-    return acc;
-  }, {});
+  const filtered = staff.filter(s => {
+    const name = `${s.first_name || ""} ${s.last_name || ""} ${s.email || ""}`.toLowerCase();
+    const matchSearch = !search || name.includes(search.toLowerCase());
+    const matchRole = filterRole === "all" || s.role === filterRole;
+    return matchSearch && matchRole;
+  });
+
+  const stats = {
+    total:    staff.length,
+    active:   staff.filter(s => s.is_active).length,
+    doctors:  staff.filter(s => s.role === "doctor").length,
+    nurses:   staff.filter(s => s.role === "nurse").length,
+  };
 
   return (
-    <div style={{ minHeight: "100vh", background: T.paper, fontFamily: "'DM Sans',sans-serif", padding: "28px 32px" }}>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=DM+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
-        * { box-sizing: border-box; }
-        @keyframes fadeUp { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
-      `}</style>
+    <div style={{ minHeight: "100vh", background: T.paper, fontFamily: "'DM Sans',sans-serif", color: T.ink }}>
 
       {/* Header */}
-      <div style={{ marginBottom: 28, animation: "fadeUp 0.3s ease" }}>
-        <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: 800, fontSize: 24, color: T.ink, marginBottom: 4 }}>Admin Dashboard</div>
-        <div style={{ fontSize: 13, color: T.inkSub }}>{orgName ?? "Your Organisation"}</div>
-      </div>
-
-      {/* Today's stats */}
-      {stats && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 12, marginBottom: 28, animation: "fadeUp 0.3s ease 0.05s both" }}>
-          <StatCard label="Visits Today"  value={stats.totalVisits} icon="🏥" color={T.ink}   bg={T.paperDim}  />
-          <StatCard label="Revenue"       value={fmt(stats.revenue)} icon="💰" color={T.sage}  bg={T.sageLight} />
-          <StatCard label="Active Now"    value={stats.active}      icon="🩺" color={T.blue}  bg={T.blueLight} />
-          <StatCard label="Bills Pending" value={stats.pending}     icon="⏳" color={T.amber} bg={T.amberLight} />
-          <StatCard label="Critical"      value={stats.critical}    icon="⚠️" color={T.rose}  bg={T.roseLight} />
-        </div>
-      )}
-
-      {/* Tabs */}
-      <div style={{ display: "flex", gap: 4, marginBottom: 20, animation: "fadeUp 0.3s ease 0.1s both" }}>
-        {[
-          { key: "staff", label: "👥 Staff", count: staff.filter(s => s.is_active).length },
-          { key: "org",   label: "🏥 Organisation" },
-        ].map(t => (
-          <button key={t.key} onClick={() => setTab(t.key)} style={{
-            padding: "8px 18px", borderRadius: T.radiusSm, fontSize: 13, fontWeight: 600,
-            background: tab === t.key ? T.sage : T.white,
-            color:      tab === t.key ? "#fff"  : T.inkMid,
-            border: `1.5px solid ${tab === t.key ? T.sage : T.border}`,
-            cursor: "pointer", fontFamily: "'DM Sans',sans-serif",
-            display: "flex", alignItems: "center", gap: 6,
-          }}>
-            {t.label}
-            {t.count != null && (
-              <span style={{ padding: "1px 6px", borderRadius: 9, fontSize: 11, background: tab === t.key ? "rgba(255,255,255,0.25)" : T.paperDim, color: tab === t.key ? "#fff" : T.inkSub }}>{t.count}</span>
-            )}
-          </button>
-        ))}
-      </div>
-
-      {/* Staff tab */}
-      {tab === "staff" && (
-        <div style={{ animation: "fadeUp 0.3s ease 0.12s both" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-            {/* Role filter */}
-            <div style={{ display: "flex", gap: 6 }}>
-              {["all", ...ALL_ROLES].map(r => (
-                <button key={r} onClick={() => setRoleFilter(r)} style={{
-                  padding: "5px 12px", borderRadius: 6, fontSize: 12, fontWeight: 600,
-                  background: roleFilter === r ? T.sage : T.white,
-                  color:      roleFilter === r ? "#fff"  : T.inkMid,
-                  border: `1px solid ${roleFilter === r ? T.sage : T.border}`,
-                  cursor: "pointer", fontFamily: "'DM Sans',sans-serif",
-                }}>
-                  {r === "all" ? `All (${staff.length})` : `${r} (${roleCounts[r] ?? 0})`}
-                </button>
-              ))}
-            </div>
-
-            <button onClick={() => setShowAdd(true)} style={{
-              padding: "9px 18px", borderRadius: T.radiusSm, background: T.sage, border: "none",
-              color: "#fff", fontFamily: "'Syne',sans-serif", fontWeight: 700, fontSize: 13, cursor: "pointer",
-            }}>
-              + Add Staff
-            </button>
+      <div style={{
+        background: T.white, borderBottom: `1px solid ${T.border}`,
+        padding: "16px 28px", position: "sticky", top: 0, zIndex: 10,
+      }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+          <div>
+            <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: 800, fontSize: 20, color: T.ink }}>Admin</div>
+            <div style={{ fontSize: 12, color: T.inkSub }}>{stats.active} active staff · {stats.doctors} doctors · {stats.nurses} nurses</div>
           </div>
+          <button onClick={() => setShowInvite(true)} style={{
+            padding: "10px 20px", background: T.sage, color: "#fff", border: "none",
+            borderRadius: T.radius, fontSize: 13, fontWeight: 700, cursor: "pointer",
+            fontFamily: "'Syne',sans-serif", boxShadow: "0 4px 12px rgba(26,102,80,0.3)",
+            display: "flex", alignItems: "center", gap: 8,
+          }}>
+            + Invite Staff
+          </button>
+        </div>
 
-          <div style={{ background: T.white, borderRadius: T.radiusLg, border: `1px solid ${T.border}`, boxShadow: T.shadow, overflow: "hidden" }}>
-            {/* Table header */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 110px 140px 120px 100px", gap: 12, padding: "10px 18px", background: T.paper, borderBottom: `1px solid ${T.border}` }}>
-              {["Staff Member", "Role", "Speciality", "Licence No.", ""].map((h, i) => (
-                <div key={i} style={{ fontSize: 11, fontWeight: 700, color: T.inkSub, textTransform: "uppercase", letterSpacing: "0.5px" }}>{h}</div>
+        {/* Tabs */}
+        <div style={{ display: "flex", gap: 2 }}>
+          {[{ key: "staff", label: "Staff Management" }, { key: "clinic", label: "Clinic Settings" }].map(t => (
+            <button key={t.key} onClick={() => setActiveTab(t.key)} style={{
+              padding: "6px 14px", borderRadius: T.radiusSm, border: "none",
+              background: activeTab === t.key ? T.ink : "transparent",
+              color: activeTab === t.key ? "#fff" : T.inkSub,
+              fontSize: 12, fontWeight: 600, cursor: "pointer",
+            }}>{t.label}</button>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ padding: "20px 28px", maxWidth: 900, margin: "0 auto" }}>
+
+        {activeTab === "staff" && (
+          <>
+            {/* Stats */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 10, marginBottom: 20 }}>
+              {[
+                { label: "Total Staff", value: stats.total, color: T.ink },
+                { label: "Active", value: stats.active, color: T.sage },
+                { label: "Doctors", value: stats.doctors, color: T.blue },
+                { label: "Nurses", value: stats.nurses, color: T.purple },
+              ].map(({ label, value, color }) => (
+                <div key={label} style={{ background: T.white, borderRadius: T.radiusSm, padding: "12px 14px", border: `1px solid ${T.border}` }}>
+                  <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: 800, fontSize: 22, color, marginBottom: 2 }}>{value}</div>
+                  <div style={{ fontSize: 11, color: T.inkSub }}>{label}</div>
+                </div>
               ))}
             </div>
 
-            {staffLoading ? (
-              <div style={{ padding: "40px 0", textAlign: "center", color: T.inkSub, fontSize: 13 }}>Loading staff…</div>
-            ) : filteredStaff.length === 0 ? (
-              <div style={{ padding: "48px 0", textAlign: "center" }}>
-                <div style={{ fontSize: 32, marginBottom: 10 }}>👤</div>
-                <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: 700, color: T.ink, marginBottom: 6 }}>No staff in this category</div>
-                <div style={{ fontSize: 13, color: T.inkSub }}>Add staff using the button above.</div>
+            {/* Search and filter */}
+            <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
+              <input
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Search staff by name or email..."
+                style={{
+                  flex: 1, padding: "10px 14px", border: `1px solid ${T.border}`,
+                  borderRadius: T.radiusSm, fontSize: 13, outline: "none",
+                }}
+              />
+              <select value={filterRole} onChange={e => setFilterRole(e.target.value)} style={{
+                padding: "10px 14px", border: `1px solid ${T.border}`,
+                borderRadius: T.radiusSm, fontSize: 13, background: T.white, outline: "none",
+              }}>
+                <option value="all">All Roles</option>
+                {ROLES.map(r => <option key={r.value} value={r.value}>{r.icon} {r.label}</option>)}
+              </select>
+            </div>
+
+            {/* Staff list */}
+            {loading ? (
+              <div style={{ textAlign: "center", padding: 40, color: T.inkSub }}>Loading staff…</div>
+            ) : filtered.length === 0 ? (
+              <div style={{
+                textAlign: "center", padding: "48px 20px", background: T.white,
+                borderRadius: T.radius, border: `1px solid ${T.border}`,
+              }}>
+                <div style={{ fontSize: 32, marginBottom: 8 }}>👥</div>
+                <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: 700, fontSize: 16, color: T.ink, marginBottom: 4 }}>
+                  {search ? "No staff found" : "No staff yet"}
+                </div>
+                <div style={{ fontSize: 13, color: T.inkSub, marginBottom: 16 }}>
+                  {search ? `No results for "${search}"` : "Invite your first team member to get started"}
+                </div>
+                {!search && (
+                  <button onClick={() => setShowInvite(true)} style={{
+                    padding: "10px 20px", background: T.sage, color: "#fff", border: "none",
+                    borderRadius: T.radiusSm, fontSize: 13, fontWeight: 700, cursor: "pointer",
+                  }}>+ Invite Staff Member</button>
+                )}
               </div>
             ) : (
-              filteredStaff.map(member => (
-                <StaffRow key={member.id} member={member} onToggleActive={handleToggleActive} />
-              ))
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {filtered.map(member => (
+                  <StaffCard
+                    key={member.id}
+                    member={member}
+                    onToggleActive={handleToggleActive}
+                    onEditRole={handleEditRole}
+                  />
+                ))}
+              </div>
             )}
-          </div>
+          </>
+        )}
 
-          <div style={{ marginTop: 14, fontSize: 12, color: T.inkSub, padding: "0 4px" }}>
-            💡 To give staff login access: Supabase Dashboard → Authentication → Users → Invite User with their work email. Once they sign in, their account auto-links via the JWT hook.
+        {activeTab === "clinic" && (
+          <div style={{ background: T.white, borderRadius: T.radius, padding: "24px", border: `1px solid ${T.border}` }}>
+            <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: 700, fontSize: 16, color: T.ink, marginBottom: 4 }}>Clinic Settings</div>
+            <div style={{ fontSize: 13, color: T.inkSub }}>Clinic profile, branding, and configuration settings coming soon.</div>
           </div>
-        </div>
+        )}
+      </div>
+
+      {/* Invite Modal */}
+      {showInvite && (
+        <InviteModal
+          orgId={orgId}
+          onClose={() => setShowInvite(false)}
+          onSuccess={loadStaff}
+        />
       )}
-
-      {/* Org tab */}
-      {tab === "org" && (
-        <div style={{ background: T.white, borderRadius: T.radiusLg, border: `1px solid ${T.border}`, boxShadow: T.shadow, padding: "24px 28px", animation: "fadeUp 0.3s ease 0.12s both" }}>
-          <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: 700, fontSize: 17, color: T.ink, marginBottom: 18 }}>Organisation Settings</div>
-          <div style={{ color: T.inkSub, fontSize: 13, lineHeight: 1.7 }}>
-            <p>Organisation name, NHIS provider code, NAFDAC number, branch management, and plan settings are managed in the <strong>Supabase database</strong> directly via the <code style={{ background: T.paperDim, padding: "1px 6px", borderRadius: 4 }}>organisations</code> table.</p>
-            <br />
-            <p>Planned for next release: in-app org settings editor, branch management, logo upload, and Paystack business account linking.</p>
-          </div>
-        </div>
-      )}
-
-      {showAdd && <AddStaffModal orgId={orgId} onClose={() => setShowAdd(false)} onAdded={loadStaff} />}
     </div>
   );
 }

@@ -97,7 +97,7 @@ Write a brief clinical summary only. No preamble.`;
 
     fetch("https://zrstwfjnkpfobsboprzs.supabase.co/functions/v1/claude-proxy", {
       method: "POST",
-      headers: { "Content-Type": "application/json", "apikey": "sb_publishable_9vhVnI6SveqLHto0wGpD7A_qwtHX8Dr" },
+      headers: { "Content-Type": "application/json", "Authorization": "Bearer sb_publishable_9vhVnI6SveqLHto0wGpD7A_qwtHX8Dr", "apikey": "sb_publishable_9vhVnI6SveqLHto0wGpD7A_qwtHX8Dr" },
       body: JSON.stringify({
         model: "claude-sonnet-4-20250514",
         max_tokens: 300,

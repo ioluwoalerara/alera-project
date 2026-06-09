@@ -23,6 +23,8 @@
 import { useState, useCallback } from "react";
 import AleraShell                from "./AleraShell.jsx";
 import AleraLogin                from "./AleraLogin.jsx";
+import AleraPatientPortal       from "./AleraPatientPortal.jsx";
+import AleraPatientAuth         from "./AleraPatientAuth.jsx";
 import AleraPatientRegistration  from "./AleraPatientRegistration.jsx";
 import AleraEncounter            from "./AleraEncounter.jsx";
 import AleraClinicalNoteEditor   from "./AleraClinicalNoteEditor.jsx";
@@ -71,6 +73,8 @@ export default function AleraApp() {
   // ── Auth (real Supabase session) ──────────────────────────────────────────
   const { isAuthenticated, loading: authLoading, signOut, orgId, staffId } = useAuth();
   const [role,         setRole]         = useState(null);
+  const [patientUser,  setPatientUser]  = useState(null); // logged-in patient
+  const [authMode,     setAuthMode]     = useState(null); // null | "staff" | "patient"
   const [staffName,    setStaffName]    = useState(null);
   const [activeScreen, setActiveScreen] = useState(null);
 
@@ -144,6 +148,9 @@ export default function AleraApp() {
     setEncounterId(null);
     setNoteId(null);
     setBillId(null);
+    setPatientUser(null);
+    setAuthMode(null);
+    setStaffName(null);
   }
 
   // ── Per-screen completion handlers — each saves to Supabase then advances ──
@@ -538,9 +545,47 @@ export default function AleraApp() {
     );
   }
 
-  // Show login if not authenticated OR if authenticated but role not yet selected
-  if (!isAuthenticated || !role) {
-    return <AleraLogin onLogin={handleLogin} />;
+  // Show patient portal if patient is logged in
+  if (patientUser) {
+    return (
+      <AleraPatientPortal
+        patient={patientUser}
+        onLogout={async () => {
+          const { supabase } = await import("./supabase.js");
+          await supabase.auth.signOut();
+          setPatientUser(null);
+          setAuthMode(null);
+        }}
+      />
+    );
+  }
+
+  // Show staff login only when explicitly requested
+  if (authMode === "staff") {
+    if (!isAuthenticated || !role) {
+      return <AleraLogin onLogin={handleLogin} />;
+    }
+  } else {
+    // Default — show patient auth screen unless staff is already logged in with a role
+    if (!isAuthenticated || !role) {
+      return (
+        <AleraPatientAuth
+          onSuccess={async (session, mode) => {
+            if (mode === "staff") { setAuthMode("staff"); return; }
+            if (!session) return;
+            // Check if this user is a patient
+            const { getPatientFromAuth } = await import("./supabase.js");
+            const patient = await getPatientFromAuth(session.user.id);
+            if (patient) {
+              setPatientUser(patient);
+            } else {
+              // Must be staff — route to staff login
+              setAuthMode("staff");
+            }
+          }}
+        />
+      );
+    }
   }
 
   // ── Post-login: shell wraps whichever screen is active ────────────────────

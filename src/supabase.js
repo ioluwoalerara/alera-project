@@ -866,3 +866,210 @@ export async function logPatientAccess(globalPatientId, orgId, staffId, accessTy
     access_type:       accessType,
   });
 }
+
+// ─── Staff Invite ─────────────────────────────────────────────────────────────
+
+/**
+ * Invite a new staff member by email.
+ * Creates auth user via Supabase invite + staff record.
+ */
+export async function inviteStaffMember(orgId, staffData) {
+  const { email, firstName, lastName, role, phone } = staffData;
+
+  // Step 1: Send invite email via Supabase Auth
+  const { data: authData, error: authError } = await supabase.auth.admin.inviteUserByEmail(email, {
+    data: { first_name: firstName, last_name: lastName },
+    redirectTo: `${window.location.origin}/?invited=true`,
+  });
+
+  if (authError) return { error: authError };
+
+  // Step 2: Create staff record
+  const { data: staff, error: staffError } = await supabase
+    .from("staff")
+    .insert({
+      org_id:        orgId,
+      auth_user_id:  authData.user.id,
+      email,
+      first_name:    firstName,
+      last_name:     lastName,
+      role,
+      phone:         phone || null,
+      is_active:     true,
+    })
+    .select()
+    .single();
+
+  if (staffError) return { error: staffError };
+  return { data: staff };
+}
+
+/**
+ * Get all staff for an org.
+ */
+export async function getOrgStaff(orgId) {
+  const { data, error } = await supabase
+    .from("staff")
+    .select("id, email, first_name, last_name, role, is_active, created_at, last_login_at, phone")
+    .eq("org_id", orgId)
+    .order("created_at", { ascending: false });
+  return { data: data || [], error };
+}
+
+/**
+ * Update staff member details.
+ */
+export async function updateStaffMember(staffId, updates) {
+  const { data, error } = await supabase
+    .from("staff")
+    .update(updates)
+    .eq("id", staffId)
+    .select()
+    .single();
+  return { data, error };
+}
+
+/**
+ * Deactivate a staff member.
+ */
+export async function deactivateStaff(staffId) {
+  return updateStaffMember(staffId, { is_active: false });
+}
+
+// ─── Patient Auth ─────────────────────────────────────────────────────────────
+
+/**
+ * Check if a logged-in user is a patient (not staff).
+ */
+export async function getPatientFromAuth(userId) {
+  const { data } = await supabase
+    .from("patients")
+    .select("id, first_name, last_name, email, phone, date_of_birth, biological_sex, blood_group, global_patient_id, address_line1, patient_allergies(allergen), pcp_name")
+    .eq("auth_user_id", userId)
+    .single();
+  return data;
+}
+
+/**
+ * Self-register a new patient account.
+ */
+export async function registerPatientAccount(userData) {
+  const { email, password, firstName, lastName, dob, phone, sex, address } = userData;
+
+  // Create auth account
+  const { data: authData, error: authError } = await supabase.auth.signUp({
+    email,
+    password,
+    options: { data: { first_name: firstName, last_name: lastName, user_type: "patient" } },
+  });
+  if (authError) return { error: authError };
+
+  // Generate APID
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let apid = "APID-";
+  for (let i = 0; i < 8; i++) apid += chars[Math.floor(Math.random() * chars.length)];
+
+  // Create patient record (org_id = null for self-registered patients)
+  const { data: patient, error: patientError } = await supabase
+    .from("patients")
+    .insert({
+      auth_user_id:     authData.user.id,
+      email,
+      first_name:       firstName,
+      last_name:        lastName,
+      date_of_birth:    dob || null,
+      biological_sex:   sex || null,
+      phone:            phone || null,
+      address_line1:    address || null,
+      global_patient_id: apid,
+      org_id:           "00000000-0000-0000-0000-000000000001", // default org for self-registered
+    })
+    .select()
+    .single();
+
+  if (patientError) return { error: patientError };
+  return { data: patient };
+}
+
+/**
+ * Get patient's upcoming appointments.
+ */
+export async function getPatientAppointments(patientId) {
+  const today = new Date().toISOString().slice(0, 10);
+  const { data } = await supabase
+    .from("appointments")
+    .select("*, staff:doctor_id(first_name, last_name)")
+    .eq("patient_id", patientId)
+    .gte("appointment_date", today)
+    .order("appointment_date", { ascending: true })
+    .limit(10);
+  return { data: data || [] };
+}
+
+/**
+ * Get patient's past encounters with clinical data.
+ */
+export async function getPatientPortalChart(patientId) {
+  const { data } = await supabase
+    .from("encounters")
+    .select(`
+      id, status, registered_at, chief_complaint,
+      assigned_doctor:staff!assigned_doctor_id(first_name, last_name),
+      vitals(bp_systolic, bp_diastolic, temperature, pulse_rate, spo2, weight_kg, recorded_at),
+      clinical_notes(assessment, plan, created_at),
+      diagnoses(name, icd_code),
+      prescriptions(drug_name, strength, frequency, duration, route)
+    `)
+    .eq("patient_id", patientId)
+    .eq("status", "completed")
+    .order("registered_at", { ascending: false })
+    .limit(20);
+  return { data: data || [] };
+}
+
+/**
+ * Search clinics on Alera by name or specialty.
+ */
+export async function searchAleraClinics(query, specialty) {
+  let q = supabase
+    .from("organisations")
+    .select("id, name, address, phone, email, specialties, created_at");
+
+  if (query) q = q.ilike("name", `%${query}%`);
+  // Use cs (contains) only if specialties column exists and has data
+  if (specialty) q = q.overlaps("specialties", [specialty]);
+
+  const { data } = await q.limit(10);
+  return { data: data || [] };
+}
+
+/**
+ * Send a message from patient to clinic.
+ */
+export async function sendPatientMessage(patientId, orgId, message) {
+  const { data, error } = await supabase
+    .from("patient_messages")
+    .insert({
+      patient_id: patientId,
+      org_id:     orgId,
+      message,
+      sender:     "patient",
+      read:       false,
+    })
+    .select()
+    .single();
+  return { data, error };
+}
+
+/**
+ * Get messages between patient and clinic.
+ */
+export async function getPatientMessages(patientId, orgId) {
+  const { data } = await supabase
+    .from("patient_messages")
+    .select("*")
+    .eq("patient_id", patientId)
+    .eq("org_id", orgId)
+    .order("created_at", { ascending: true });
+  return { data: data || [] };
+}

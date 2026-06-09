@@ -124,7 +124,7 @@ async function parseDictationToSOAP(transcript, patient) {
   try {
     const res = await fetch("https://zrstwfjnkpfobsboprzs.supabase.co/functions/v1/claude-proxy", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "Authorization": "Bearer sb_publishable_9vhVnI6SveqLHto0wGpD7A_qwtHX8Dr", "apikey": "sb_publishable_9vhVnI6SveqLHto0wGpD7A_qwtHX8Dr" },
       body: JSON.stringify({
         model: "claude-sonnet-4-20250514",
         max_tokens: 1200,
@@ -600,7 +600,7 @@ Provide 3-5 differentials ranked by likelihood. Be specific to Nigerian clinical
 
         const res = await fetch("https://zrstwfjnkpfobsboprzs.supabase.co/functions/v1/claude-proxy", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", "Authorization": "Bearer sb_publishable_9vhVnI6SveqLHto0wGpD7A_qwtHX8Dr", "apikey": "sb_publishable_9vhVnI6SveqLHto0wGpD7A_qwtHX8Dr" },
           body: JSON.stringify({
             model: "claude-sonnet-4-20250514",
             max_tokens: 1000,
