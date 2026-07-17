@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Why Nigerian Clinics Are Still Running on Paper in 2026 — Alera</title>
+  <meta name="description" content="In 2026, most private clinics in Nigeria still manage patient records on paper. Here's why — and why it matters more than most people realise." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --sage:     #1A6650;
+      --sage-l:   #E6F3EE;
+      --sage-m:   #237A5F;
+      --ink:      #0D1117;
+      --ink-sub:  #6E7891;
+      --ink-mid:  #3D4558;
+      --paper:    #F7F5F1;
+      --white:    #FFFFFF;
+      --border:   #E8E4DE;
+      --font-d:   'Syne', sans-serif;
+      --font-b:   'DM Sans', sans-serif;
+      --font-m:   'JetBrains Mono', monospace;
+    }
+
+    html { scroll-behavior: smooth; }
+    body { background: var(--white); color: var(--ink); font-family: var(--font-b); font-size: 16px; line-height: 1.6; -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+
+    /* ── NAV ── */
+    nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 48px; height: 60px;
+      background: rgba(255,255,255,0.92); backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border);
+    }
+    .logo { font-family: var(--font-d); font-weight: 800; font-size: 20px; color: var(--ink); text-decoration: none; letter-spacing: -0.5px; }
+    .logo span { color: var(--sage); }
+    .nav-right { display: flex; gap: 10px; }
+    .btn { display: inline-flex; align-items: center; gap: 6px; padding: 9px 20px; border-radius: 8px; font-family: var(--font-d); font-weight: 700; font-size: 13px; cursor: pointer; text-decoration: none; transition: all 0.15s; border: none; white-space: nowrap; }
+    .btn-outline { background: transparent; color: var(--ink); border: 1px solid var(--border); }
+    .btn-outline:hover { border-color: var(--ink-sub); background: var(--paper); }
+    .btn-sage { background: var(--sage); color: #fff; }
+    .btn-sage:hover { background: var(--sage-m); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(26,102,80,0.25); }
+
+    /* ── HERO ── */
+    .post-hero {
+      padding: 120px 48px 64px;
+      max-width: 760px;
+      margin: 0 auto;
+      text-align: center;
+    }
+
+    .post-tag {
+      display: inline-flex; align-items: center; gap: 7px;
+      padding: 5px 14px; border-radius: 20px;
+      background: var(--sage-l); color: var(--sage);
+      font-size: 12px; font-weight: 700; font-family: var(--font-m);
+      letter-spacing: 0.3px; margin-bottom: 24px;
+    }
+
+    .post-hero h1 {
+      font-family: var(--font-d); font-weight: 800;
+      font-size: clamp(32px, 4vw, 52px); line-height: 1.1;
+      letter-spacing: -2px; color: var(--ink); margin-bottom: 20px;
+    }
+
+    .post-hero h1 em { font-style: normal; color: var(--sage); }
+
+    .post-meta {
+      display: flex; align-items: center; justify-content: center; gap: 16px;
+      font-size: 13px; color: var(--ink-sub); font-family: var(--font-m);
+      margin-top: 24px;
+    }
+    .post-meta-dot { width: 3px; height: 3px; border-radius: 50%; background: var(--border); }
+
+    .post-author {
+      display: flex; align-items: center; justify-content: center; gap: 10px;
+      margin-top: 28px; padding-top: 28px; border-top: 1px solid var(--border);
+    }
+    .author-avatar {
+      width: 36px; height: 36px; border-radius: 50%; background: var(--sage);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 12px; font-weight: 700; color: #fff; font-family: var(--font-d);
+    }
+    .author-name { font-size: 14px; font-weight: 600; color: var(--ink); }
+    .author-title { font-size: 12px; color: var(--ink-sub); }
+
+    /* ── ARTICLE BODY ── */
+    .post-body {
+      max-width: 680px;
+      margin: 0 auto;
+      padding: 0 48px 96px;
+    }
+
+    .post-body p {
+      font-size: 17px;
+      line-height: 1.8;
+      color: var(--ink-mid);
+      margin-bottom: 24px;
+    }
+
+    .post-body p strong { color: var(--ink); font-weight: 600; }
+
+    .post-body h2 {
+      font-family: var(--font-d);
+      font-weight: 800;
+      font-size: 26px;
+      letter-spacing: -0.8px;
+      color: var(--ink);
+      margin-top: 56px;
+      margin-bottom: 20px;
+    }
+
+    .post-body h3 {
+      font-family: var(--font-d);
+      font-weight: 700;
+      font-size: 18px;
+      color: var(--ink);
+      margin-top: 36px;
+      margin-bottom: 12px;
+    }
+
+    .post-divider {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 48px 0;
+    }
+
+    .pull-quote {
+      border-left: 3px solid var(--sage);
+      padding: 20px 28px;
+      margin: 40px 0;
+      background: var(--paper);
+      border-radius: 0 12px 12px 0;
+    }
+    .pull-quote p {
+      font-family: var(--font-d);
+      font-size: 20px !important;
+      font-weight: 700;
+      line-height: 1.4 !important;
+      color: var(--ink) !important;
+      margin-bottom: 0 !important;
+      letter-spacing: -0.5px;
+    }
+
+    .stat-callout {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin: 40px 0;
+    }
+    .stat-box {
+      background: var(--paper);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+      text-align: center;
+    }
+    .stat-num {
+      font-family: var(--font-d);
+      font-size: 28px;
+      font-weight: 800;
+      color: var(--sage);
+      display: block;
+      margin-bottom: 4px;
+    }
+    .stat-label {
+      font-size: 12px;
+      color: var(--ink-sub);
+      line-height: 1.4;
+    }
+
+    .source-note {
+      font-size: 12px !important;
+      color: var(--ink-sub) !important;
+      font-family: var(--font-m);
+      margin-top: -12px !important;
+      opacity: 0.7;
+    }
+
+    /* ── CTA ── */
+    .post-cta {
+      background: var(--ink);
+      border-radius: 20px;
+      padding: 48px;
+      text-align: center;
+      margin: 64px 0 0;
+    }
+    .post-cta h3 {
+      font-family: var(--font-d);
+      font-size: 28px;
+      font-weight: 800;
+      color: #fff;
+      letter-spacing: -1px;
+      margin-bottom: 12px;
+    }
+    .post-cta p {
+      font-size: 15px !important;
+      color: rgba(255,255,255,0.5) !important;
+      margin-bottom: 24px !important;
+    }
+
+    /* ── FOOTER ── */
+    footer {
+      background: var(--paper);
+      border-top: 1px solid var(--border);
+      padding: 28px 48px;
+    }
+    .footer-inner {
+      max-width: 1100px; margin: 0 auto;
+      display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px;
+    }
+    .footer-logo { font-family: var(--font-d); font-weight: 800; font-size: 18px; color: var(--ink); text-decoration: none; }
+    .footer-logo span { color: var(--sage); }
+    .footer-copy { font-size: 13px; color: var(--ink-sub); }
+
+    @media (max-width: 700px) {
+      nav { padding: 0 20px; }
+      .post-hero { padding: 100px 20px 40px; }
+      .post-body { padding: 0 20px 64px; }
+      .stat-callout { grid-template-columns: 1fr; }
+      .post-cta { padding: 32px 24px; }
+      footer { padding: 24px 20px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- NAV -->
+  <nav>
+    <a href="index.html" class="logo">al<span>era</span></a>
+    <div class="nav-right">
+      <a href="index.html#waitlist" class="btn btn-sage">Get early access →</a>
+    </div>
+  </nav>
+
+  <!-- HERO -->
+  <div class="post-hero">
+    <div class="post-tag">Market</div>
+    <h1>Why Nigerian Clinics Are Still Running on <em>Paper</em> in 2026</h1>
+    <div class="post-meta">
+      <span>June 2026</span>
+      <div class="post-meta-dot"></div>
+      <span>6 min read</span>
+    </div>
+    <div class="post-author">
+      <div class="author-avatar">IO</div>
+      <div>
+        <div class="author-name">Ismail Oluwo</div>
+        <div class="author-title">Founder, Alera</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- BODY -->
+  <div class="post-body">
+
+    <p>I walked into a private clinic in Lagos last month. The waiting room was full. The receptionist was on her phone. And on the desk in front of her sat a stack of folders — thick, dog-eared, handwritten patient records — held together with a rubber band.</p>
+
+    <p>This is not unusual. This is the norm.</p>
+
+    <p>In 2026, with AI reshaping industries and smartphones in every pocket, most private clinics in Nigeria still manage patient records on paper. Some have graduated to Excel spreadsheets. A few use WhatsApp to send prescriptions. Very few have a functional Electronic Medical Record system — and almost none built for how a Nigerian clinic actually works.</p>
+
+    <p>I want to explain why — and why it matters more than most people realise.</p>
+
+    <hr class="post-divider" />
+
+    <h2>The Scale of the Problem</h2>
+
+    <p>Nigeria has over 10,000 registered private clinics. They see millions of patients every week. They are the frontline of healthcare for most Nigerians — not teaching hospitals, not federal medical centres, but the neighbourhood clinic on your street.</p>
+
+    <p>And most of them are running blind.</p>
+
+    <div class="stat-callout">
+      <div class="stat-box">
+        <span class="stat-num">10,000+</span>
+        <span class="stat-label">Private clinics in Nigeria</span>
+      </div>
+      <div class="stat-box">
+        <span class="stat-num">60–70%</span>
+        <span class="stat-label">Of all outpatient care handled by private providers</span>
+      </div>
+      <div class="stat-box">
+        <span class="stat-num">&lt;20 sec</span>
+        <span class="stat-label">How long Alera's AI takes to fill a full SOAP note</span>
+      </div>
+    </div>
+    <p class="source-note">Private clinic figures: Kapsule Research, February 2026.</p>
+
+    <p>When a patient walks in, the doctor has no idea what medications they're on. No idea what they're allergic to. No idea that they were just seen at another clinic last week for the same complaint. Every visit starts from zero.</p>
+
+    <div class="pull-quote">
+      <p>"Patient records almost never follow a patient from a private clinic to a public hospital or the other way around."</p>
+    </div>
+
+    <hr class="post-divider" />
+
+    <h2>Why Paper Has Survived This Long</h2>
+
+    <p>This is the question worth asking. Why hasn't the EMR revolution that transformed American and European hospitals happened here?</p>
+
+    <p><strong>The answer is not that Nigerian clinic owners don't care.</strong> It's that every solution built for this market has failed them in predictable ways.</p>
+
+    <h3>1. They were built for hospitals, not clinics.</h3>
+
+    <p>The EMR systems that exist in Nigeria — mostly imported or adapted from Western products — were designed for large hospital systems with dedicated IT departments, stable internet, and dozens of staff. A two-doctor clinic in Surulere doesn't have an IT department. They have a receptionist who also does billing.</p>
+
+    <h3>2. They assume reliable internet.</h3>
+
+    <p>Nigeria's internet infrastructure is improving, but it is not reliable — especially in secondary cities and dense urban areas where the most clinics operate. A system that goes offline when the connection drops is worse than paper. At least paper doesn't freeze.</p>
+
+    <h3>3. They're expensive and require training.</h3>
+
+    <p>Most EMR systems come with implementation fees, annual licences, and days of staff training. For a clinic running on thin margins, that's a non-starter. The economics never made sense.</p>
+
+    <h3>4. They weren't built for Nigerian clinical workflows.</h3>
+
+    <p>NHIS billing codes. Nigerian drug formularies. The specific way a Lagos clinic triage works. These aren't edge cases — they're the entire job. A system that ignores this forces clinics to maintain a parallel paper system anyway, defeating the purpose entirely.</p>
+
+    <hr class="post-divider" />
+
+    <h2>What the Cost of Paper Actually Looks Like</h2>
+
+    <p>The cost of paper records is rarely a single dramatic event. It's a slow, invisible leak.</p>
+
+    <p>It's the NHIS claim rejected because the diagnosis code was written illegibly. It's the patient who had a drug reaction two years ago, but nobody knows because the record is in a folder nobody can find. It's the doctor spending the last twenty minutes of every day writing up notes from memory instead of being with patients.</p>
+
+    <p>It's the clinic owner who has no idea which services are profitable, which days are busiest, or why revenue is flat despite a full waiting room every morning.</p>
+
+    <div class="pull-quote">
+      <p>Paper doesn't feel like a problem until it becomes a crisis. By then, the damage is already done.</p>
+    </div>
+
+    <hr class="post-divider" />
+
+    <h2>Why This Moment Is Different</h2>
+
+    <p>We've tried to solve this before. What makes now different?</p>
+
+    <p><strong>AI has changed the documentation equation.</strong> The reason doctors hate EMRs is typing. Clinical documentation is slow, tedious, and takes time away from patients. Voice-first AI that turns a spoken encounter into a structured SOAP note in under 20 seconds changes the fundamental calculus. The system becomes faster than paper, not slower.</p>
+
+    <p><strong>Smartphones have reached the clinic.</strong> Every nurse, doctor, and receptionist in Nigeria has a smartphone. The infrastructure for a mobile-first EMR now exists at the clinic level — it didn't five years ago.</p>
+
+    <p><strong>NHIA is expanding fast.</strong> Nigeria's health insurance authority enrolled 19.2 million people by the end of 2024 — a 40% increase in a single year. As more patients arrive with insurance, the pressure on clinics to submit clean, digital claims is going to intensify. Paper won't survive this shift.</p>
+
+    <hr class="post-divider" />
+
+    <h2>What We're Building</h2>
+
+    <p>Alera is Nigeria's first AI-native EMR — built specifically for private clinics, designed around how Nigerian doctors actually work.</p>
+
+    <p>It runs offline. It handles NHIS claims automatically. It gives every doctor an AI assistant that documents encounters in real time. And it connects patient records across every Alera clinic, so a patient's history follows them wherever they go.</p>
+
+    <p>The stack of folders on that receptionist's desk is not inevitable. It's a product gap — and we're here to close it.</p>
+
+    <!-- CTA -->
+    <div class="post-cta">
+      <h3>Ready to move off paper?</h3>
+      <p>We're onboarding clinics in Lagos now — with full setup support and 3 months free.</p>
+      <a href="index.html#waitlist" class="btn btn-sage">Join the waitlist →</a>
+    </div>
+
+  </div>
+
+  <!-- FOOTER -->
+  <footer>
+    <div class="footer-inner">
+      <a href="index.html" class="footer-logo">al<span>era</span></a>
+      <div class="footer-copy">© 2026 Alera Digital Health Limited. Built in Lagos.</div>
+    </div>
+  </footer>
+
+</body>
+</html>

@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>The Hidden Cost of NHIA Claims Is Sitting in Your Paper Records — Alera</title>
+  <meta name="description" content="Rejected NHIA claims don't happen because the care wasn't given. They happen because the paperwork didn't agree with itself. Here's what that costs your clinic." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --font-d: 'Plus Jakarta Sans', sans-serif;
+      --font-m: 'Inter', sans-serif;
+      --ink: #0f1117;
+      --ink-sub: #6b7280;
+      --paper: #f8f7f4;
+      --sage: #3d7a5a;
+      --border: #e5e2db;
+      --white: #ffffff;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: var(--font-m);
+      background: var(--white);
+      color: var(--ink);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── NAV ── */
+    nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      height: 64px;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 48px;
+      background: rgba(255,255,255,0.92);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+    }
+    .logo {
+      font-family: var(--font-d);
+      font-weight: 800;
+      font-size: 22px;
+      color: var(--ink);
+      text-decoration: none;
+      letter-spacing: -0.5px;
+    }
+    .logo span { color: var(--sage); }
+    .nav-right { display: flex; align-items: center; gap: 12px; }
+    .btn {
+      display: inline-flex; align-items: center;
+      padding: 10px 20px;
+      border-radius: 10px;
+      font-family: var(--font-d);
+      font-weight: 700;
+      font-size: 14px;
+      text-decoration: none;
+      transition: opacity 0.2s;
+    }
+    .btn:hover { opacity: 0.85; }
+    .btn-sage { background: var(--sage); color: #fff; }
+
+    /* ── HERO ── */
+    .post-hero {
+      padding: 120px 48px 56px;
+      max-width: 760px;
+      margin: 0 auto;
+    }
+    .post-tag {
+      display: inline-block;
+      background: var(--paper);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 4px 14px;
+      font-family: var(--font-d);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--sage);
+      margin-bottom: 20px;
+    }
+    .post-hero h1 {
+      font-family: var(--font-d);
+      font-size: clamp(32px, 5vw, 48px);
+      font-weight: 800;
+      line-height: 1.15;
+      letter-spacing: -1.5px;
+      color: var(--ink);
+      margin-bottom: 24px;
+    }
+    .post-hero h1 em {
+      font-style: italic;
+      color: var(--sage);
+    }
+    .post-meta {
+      display: flex; align-items: center; gap: 10px;
+      font-size: 14px;
+      color: var(--ink-sub);
+      margin-bottom: 28px;
+    }
+    .post-meta-dot {
+      width: 4px; height: 4px;
+      border-radius: 50%;
+      background: var(--ink-sub);
+    }
+    .post-author {
+      display: flex; align-items: center; gap: 12px;
+    }
+    .author-avatar {
+      width: 40px; height: 40px;
+      border-radius: 50%;
+      background: var(--sage);
+      color: #fff;
+      display: flex; align-items: center; justify-content: center;
+      font-family: var(--font-d);
+      font-weight: 800;
+      font-size: 13px;
+    }
+    .author-name {
+      font-family: var(--font-d);
+      font-weight: 700;
+      font-size: 14px;
+      color: var(--ink);
+    }
+    .author-title {
+      font-size: 13px;
+      color: var(--ink-sub);
+    }
+
+    /* ── BODY ── */
+    .post-body {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 0 48px 80px;
+    }
+    .post-body p {
+      font-size: 17px;
+      line-height: 1.8;
+      color: #1f2937;
+      margin-bottom: 24px;
+    }
+    .post-body p strong { color: var(--ink); font-weight: 600; }
+    .post-body h2 {
+      font-family: var(--font-d);
+      font-weight: 800;
+      font-size: 26px;
+      letter-spacing: -0.8px;
+      color: var(--ink);
+      margin-top: 56px;
+      margin-bottom: 20px;
+    }
+    .post-body h3 {
+      font-family: var(--font-d);
+      font-weight: 700;
+      font-size: 18px;
+      color: var(--ink);
+      margin-top: 36px;
+      margin-bottom: 12px;
+    }
+
+    .post-divider {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 48px 0;
+    }
+
+    /* ── STAT CALLOUT ── */
+    .stat-callout {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin: 40px 0;
+    }
+    .stat-box {
+      background: var(--paper);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+      text-align: center;
+    }
+    .stat-num {
+      font-family: var(--font-d);
+      font-size: 28px;
+      font-weight: 800;
+      color: var(--sage);
+      display: block;
+      margin-bottom: 4px;
+    }
+    .stat-label {
+      font-size: 12px;
+      color: var(--ink-sub);
+      line-height: 1.4;
+    }
+    .source-note {
+      font-size: 12px !important;
+      color: var(--ink-sub) !important;
+      font-family: var(--font-m);
+      margin-top: -12px !important;
+      opacity: 0.7;
+    }
+
+    /* ── PULL QUOTE ── */
+    .pull-quote {
+      border-left: 3px solid var(--sage);
+      padding: 20px 28px;
+      margin: 40px 0;
+      background: var(--paper);
+      border-radius: 0 12px 12px 0;
+    }
+    .pull-quote p {
+      font-family: var(--font-d);
+      font-size: 20px !important;
+      font-weight: 700;
+      line-height: 1.4 !important;
+      color: var(--ink) !important;
+      margin-bottom: 0 !important;
+      letter-spacing: -0.5px;
+    }
+
+    /* ── CTA ── */
+    .post-cta {
+      background: var(--ink);
+      border-radius: 20px;
+      padding: 48px;
+      text-align: center;
+      margin: 64px 0 0;
+    }
+    .post-cta h3 {
+      font-family: var(--font-d);
+      font-size: 28px;
+      font-weight: 800;
+      color: #fff;
+      letter-spacing: -1px;
+      margin-bottom: 12px;
+    }
+    .post-cta p {
+      font-size: 15px !important;
+      color: rgba(255,255,255,0.5) !important;
+      margin-bottom: 24px !important;
+    }
+    .post-cta .btn-sage {
+      font-size: 15px;
+      padding: 14px 28px;
+    }
+
+    /* ── FOOTER ── */
+    footer {
+      background: var(--paper);
+      border-top: 1px solid var(--border);
+      padding: 28px 48px;
+    }
+    .footer-inner {
+      max-width: 1100px; margin: 0 auto;
+      display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px;
+    }
+    .footer-logo {
+      font-family: var(--font-d);
+      font-weight: 800;
+      font-size: 18px;
+      color: var(--ink);
+      text-decoration: none;
+    }
+    .footer-logo span { color: var(--sage); }
+    .footer-copy { font-size: 13px; color: var(--ink-sub); }
+
+    @media (max-width: 700px) {
+      nav { padding: 0 20px; }
+      .post-hero { padding: 100px 20px 40px; }
+      .post-body { padding: 0 20px 64px; }
+      .stat-callout { grid-template-columns: 1fr; }
+      .post-cta { padding: 32px 24px; }
+      footer { padding: 24px 20px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- NAV -->
+  <nav>
+    <a href="index.html" class="logo">al<span>era</span></a>
+    <div class="nav-right">
+      <a href="index.html#waitlist" class="btn btn-sage">Get early access →</a>
+    </div>
+  </nav>
+
+  <!-- HERO -->
+  <div class="post-hero">
+    <div class="post-tag">Operations &amp; Costs</div>
+    <h1>The Hidden Cost of NHIA Claims Is Sitting in Your <em>Paper Records</em></h1>
+    <div class="post-meta">
+      <span>July 2026</span>
+      <div class="post-meta-dot"></div>
+      <span>2 min read</span>
+    </div>
+    <div class="post-author">
+      <div class="author-avatar">IO</div>
+      <div>
+        <div class="author-name">Ismail Oluwo</div>
+        <div class="author-title">Founder, Alera</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- BODY -->
+  <div class="post-body">
+
+    <p>Every clinic owner knows the obvious cost of paper: lost files, slow handoffs, a receptionist drowning in folders. What most don't see is the cost sitting one layer underneath — the NHIA claim that gets rejected three weeks after the patient has already gone home.</p>
+
+    <div class="stat-callout">
+      <div class="stat-box">
+        <span class="stat-num">22.03M</span>
+        <span class="stat-label">Nigerians enrolled in NHIA schemes</span>
+      </div>
+      <div class="stat-box">
+        <span class="stat-num">35%</span>
+        <span class="stat-label">Year-on-year enrolment growth, with enforcement accelerating</span>
+      </div>
+      <div class="stat-box">
+        <span class="stat-num">#1</span>
+        <span class="stat-label">Cause of claim rejection: missing or inconsistent documentation</span>
+      </div>
+    </div>
+    <p class="source-note">Source: NHIA Director-General, NAIPE Annual General Meeting, July 2026</p>
+
+    <hr class="post-divider" />
+
+    <h2>Where the Money Actually Leaks</h2>
+
+    <p>Missing documentation is the single most common reason NHIA returns or queries a claim. On paper, that means a diagnosis code written illegibly, a drug entry left out of the register, a billing slip that doesn't match the consultation note.</p>
+
+    <p>None of this shows up as a cost on the day it happens. It shows up six weeks later as a rejected claim, a resubmission, and a clinic absorbing care it already delivered for free.</p>
+
+    <p>And the stakes are rising. With enrolment at 22 million and growing by 35% year-on-year, NHIA has moved from policy to enforcement — sanctioning non-compliant facilities, resolving nearly 4,000 complaints, and introducing mandatory service standards including a one-hour treatment commencement target for urgent care. More enrollees means more claims. More claims means more exposure to the documentation gaps your paper system has always had.</p>
+
+    <hr class="post-divider" />
+
+    <h2>Reconciliation Is a Full-Time Job Nobody Budgeted For</h2>
+
+    <p>Compiling a month of NHIA claims from paper means combining outpatient books, pharmacy logs, lab registers, and billing slips by hand — checking that names, codes, and amounts agree across four different paper trails before submission. Every mismatch is a delay. Every delay is money the clinic doesn't get back.</p>
+
+    <p>The irony is that NHIA has increased capitation payments by 93% and fee-for-service reimbursements by 378%. The money is there. But it only reaches clinics whose documentation holds up to scrutiny.</p>
+
+    <div class="pull-quote">
+      <p>"The claim doesn't get rejected because the care wasn't given. It gets rejected because the paperwork didn't agree with itself."</p>
+    </div>
+
+    <h2>What Changes With a Digital Record</h2>
+
+    <p>When a SOAP note, a drug order, and a billing line come from the same record instead of four separate paper trails, there's nothing left to reconcile — the documentation was complete and consistent the moment it was written.</p>
+
+    <p>That's the difference between chasing a rejected claim in week six and submitting a clean one in week one.</p>
+
+    <div class="post-cta">
+      <h3>Ready to stop losing claims to paperwork?</h3>
+      <p>Alera generates complete, consistent records the moment care is delivered — so your NHIA submissions are clean from day one.</p>
+      <a href="index.html#waitlist" class="btn btn-sage">Join the waitlist →</a>
+    </div>
+
+  </div>
+
+  <!-- FOOTER -->
+  <footer>
+    <div class="footer-inner">
+      <a href="index.html" class="footer-logo">al<span>era</span></a>
+      <span class="footer-copy">© 2026 Alera Digital Health Limited. All rights reserved.</span>
+    </div>
+  </footer>
+
+</body>
+</html>

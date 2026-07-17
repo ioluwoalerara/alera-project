@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Alera — Nigeria's AI-Native EMR</title>
+  <meta name="description" content="Alera is Nigeria's first AI-native clinical platform. Built for clinics, designed for doctors, trusted by patients." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --sage:     #1A6650;
+      --sage-l:   #E6F3EE;
+      --sage-m:   #237A5F;
+      --ink:      #0D1117;
+      --ink-sub:  #6E7891;
+      --ink-mid:  #3D4558;
+      --paper:    #F7F5F1;
+      --white:    #FFFFFF;
+      --border:   #E8E4DE;
+      --border-m: rgba(13,17,23,0.08);
+      --blue:     #1854A8;
+      --blue-l:   #E8F0FB;
+      --amber:    #C97A10;
+      --amber-l:  #FEF5E7;
+      --font-d:   'Syne', sans-serif;
+      --font-b:   'DM Sans', sans-serif;
+      --font-m:   'JetBrains Mono', monospace;
+    }
+
+    html { scroll-behavior: smooth; }
+    body { background: var(--white); color: var(--ink); font-family: var(--font-b); font-size: 16px; line-height: 1.6; -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+
+    /* ── NAV ── */
+    nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 48px; height: 60px;
+      background: rgba(255,255,255,0.92); backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .logo { font-family: var(--font-d); font-weight: 800; font-size: 20px; color: var(--ink); text-decoration: none; letter-spacing: -0.5px; }
+    .logo span { color: var(--sage); }
+
+    .nav-links { display: flex; gap: 28px; list-style: none; }
+    .nav-links a { color: var(--ink-sub); text-decoration: none; font-size: 14px; font-weight: 500; transition: color 0.15s; }
+    .nav-links a:hover { color: var(--ink); }
+
+    .nav-right { display: flex; gap: 10px; }
+
+    .btn { display: inline-flex; align-items: center; gap: 6px; padding: 9px 20px; border-radius: 8px; font-family: var(--font-d); font-weight: 700; font-size: 13px; cursor: pointer; text-decoration: none; transition: all 0.15s; border: none; white-space: nowrap; }
+    .btn-outline { background: transparent; color: var(--ink); border: 1px solid var(--border); }
+    .btn-outline:hover { border-color: var(--ink-sub); background: var(--paper); }
+    .btn-sage { background: var(--sage); color: #fff; }
+    .btn-sage:hover { background: var(--sage-m); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(26,102,80,0.25); }
+    .btn-lg { padding: 13px 28px; font-size: 15px; border-radius: 10px; }
+
+    /* ── HERO ── */
+    .hero {
+      padding: 130px 48px 80px;
+      max-width: 1100px; margin: 0 auto;
+      display: grid; grid-template-columns: 1fr 1fr; gap: 64px; align-items: center;
+    }
+
+    .hero-badge {
+      display: inline-flex; align-items: center; gap: 7px;
+      padding: 5px 14px; border-radius: 20px;
+      background: var(--sage-l); color: var(--sage);
+      font-size: 12px; font-weight: 700; font-family: var(--font-m);
+      letter-spacing: 0.3px; margin-bottom: 24px;
+    }
+    .hero-badge-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--sage); animation: pulse 2s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+    .hero h1 {
+      font-family: var(--font-d); font-weight: 800;
+      font-size: clamp(40px, 4.5vw, 60px); line-height: 1.08;
+      letter-spacing: -2px; color: var(--ink); margin-bottom: 20px;
+    }
+
+    .hero h1 em { font-style: normal; color: var(--sage); }
+
+    .hero-sub { font-size: 17px; color: var(--ink-sub); line-height: 1.7; margin-bottom: 36px; max-width: 420px; }
+
+    .hero-btns { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 40px; }
+
+    .hero-social-proof { display: flex; align-items: center; gap: 10px; }
+    .hero-avatars { display: flex; }
+    .hero-avatar { width: 28px; height: 28px; border-radius: 50%; border: 2px solid var(--white); margin-left: -8px; background: var(--sage); display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; color: #fff; }
+    .hero-avatar:first-child { margin-left: 0; }
+    .hero-avatar.b { background: #1854A8; }
+    .hero-avatar.c { background: #5E3FAE; }
+    .hero-social-text { font-size: 13px; color: var(--ink-sub); }
+    .hero-social-text strong { color: var(--ink); }
+
+    /* ── HERO MOCKUP ── */
+    .hero-mockup {
+      background: var(--white);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 8px 32px rgba(13,17,23,0.08), 0 2px 8px rgba(13,17,23,0.04);
+    }
+
+    .mockup-topbar {
+      background: var(--paper); border-bottom: 1px solid var(--border);
+      padding: 10px 14px; display: flex; align-items: center; gap: 10px;
+    }
+    .mockup-dots { display: flex; gap: 5px; }
+    .mockup-dot { width: 10px; height: 10px; border-radius: 50%; }
+    .dot-r { background: #FF5F57; } .dot-y { background: #FEBC2E; } .dot-g { background: #28C840; }
+    .mockup-url { flex: 1; background: var(--white); border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; font-size: 11px; color: var(--ink-sub); font-family: var(--font-m); text-align: center; }
+
+    .mockup-nav { background: var(--ink); padding: 10px 14px; display: flex; align-items: center; gap: 8px; }
+    .mockup-logo { font-family: var(--font-d); font-weight: 800; font-size: 14px; color: #fff; }
+    .mockup-logo span { color: #4ADE80; }
+    .mockup-pills { display: flex; gap: 4px; margin-left: 12px; }
+    .mockup-pill { font-size: 10px; padding: 3px 8px; border-radius: 4px; background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.5); font-family: var(--font-m); }
+    .mockup-pill.active { background: rgba(255,255,255,0.15); color: #fff; }
+
+    .mockup-body { padding: 14px; }
+
+    .q-item { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 8px; border: 1px solid var(--border); margin-bottom: 7px; background: var(--white); }
+    .q-avatar { width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; color: #fff; flex-shrink: 0; }
+    .q-name { font-size: 12px; font-weight: 600; color: var(--ink); }
+    .q-info { font-size: 10px; color: var(--ink-sub); margin-top: 1px; }
+    .q-badge { margin-left: auto; font-size: 9px; padding: 3px 8px; border-radius: 10px; font-weight: 700; font-family: var(--font-m); white-space: nowrap; }
+    .badge-triage { background: var(--amber-l); color: var(--amber); }
+    .badge-doctor { background: var(--sage-l); color: var(--sage); }
+    .badge-pharmacy { background: var(--blue-l); color: var(--blue); }
+
+    .ai-panel { background: var(--ink); border-radius: 10px; padding: 12px; margin-top: 10px; }
+    .ai-panel-header { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+    .ai-dot { width: 5px; height: 5px; border-radius: 50%; background: #4ADE80; animation: pulse 2s infinite; }
+    .ai-label { font-size: 9px; color: #4ADE80; font-family: var(--font-m); letter-spacing: 1px; text-transform: uppercase; }
+    .ai-dx { display: flex; align-items: center; gap: 6px; margin-bottom: 5px; }
+    .ai-dx-badge { font-size: 9px; padding: 2px 7px; border-radius: 5px; font-weight: 700; }
+    .ai-dx-h { background: rgba(74,222,128,0.15); color: #4ADE80; }
+    .ai-dx-m { background: rgba(252,211,77,0.15); color: #FCD34D; }
+    .ai-dx-name { font-size: 11px; color: rgba(255,255,255,0.7); }
+    .ai-note { font-size: 10px; color: rgba(255,255,255,0.4); line-height: 1.5; margin-top: 6px; }
+
+    /* ── DIVIDER STRIP ── */
+    .strip { background: var(--paper); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 20px 48px; display: flex; justify-content: center; gap: 64px; flex-wrap: wrap; }
+    .strip-stat { text-align: center; }
+    .strip-num { font-family: var(--font-d); font-size: 26px; font-weight: 800; color: var(--ink); display: block; }
+    .strip-label { font-size: 12px; color: var(--ink-sub); margin-top: 2px; }
+
+    /* ── SECTIONS ── */
+    .section { padding: 88px 48px; }
+    .section-inner { max-width: 1100px; margin: 0 auto; }
+    .section-alt { background: var(--paper); }
+
+    .eyebrow { display: inline-block; font-family: var(--font-m); font-size: 11px; color: var(--sage); letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 14px; }
+    .section-h { font-family: var(--font-d); font-weight: 800; font-size: clamp(28px, 3.5vw, 44px); line-height: 1.1; letter-spacing: -1.5px; color: var(--ink); margin-bottom: 16px; }
+    .section-p { font-size: 17px; color: var(--ink-sub); line-height: 1.7; max-width: 520px; margin-bottom: 48px; }
+
+    /* ── PROBLEM ── */
+    .problem-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: start; }
+    .problem-cards { display: flex; flex-direction: column; gap: 12px; }
+    .problem-card { background: var(--white); border: 1px solid var(--border); border-radius: 12px; padding: 20px 22px; border-left: 3px solid var(--sage); }
+    .problem-card-num { font-family: var(--font-d); font-size: 30px; font-weight: 800; color: var(--ink); margin-bottom: 4px; }
+    .problem-card-text { font-size: 14px; color: var(--ink-sub); line-height: 1.5; }
+
+    /* ── FEATURES ── */
+    .features-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+    .feature-card { background: var(--white); border: 1px solid var(--border); border-radius: 14px; padding: 24px; transition: box-shadow 0.2s, transform 0.2s; }
+    .feature-card:hover { box-shadow: 0 8px 24px rgba(13,17,23,0.07); transform: translateY(-2px); }
+    .feature-icon { width: 40px; height: 40px; border-radius: 10px; background: var(--sage-l); display: flex; align-items: center; justify-content: center; font-size: 18px; margin-bottom: 14px; }
+    .feature-title { font-family: var(--font-d); font-weight: 700; font-size: 15px; color: var(--ink); margin-bottom: 8px; }
+    .feature-desc { font-size: 13px; color: var(--ink-sub); line-height: 1.6; }
+
+    /* ── AUDIENCE ── */
+    .audience-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+    .audience-card { border-radius: 16px; padding: 28px; }
+    .audience-card.clinic { background: var(--ink); color: #fff; }
+    .audience-card.doctor { background: var(--sage-l); }
+    .audience-card.patient { background: var(--blue-l); }
+    .audience-emoji { font-size: 32px; margin-bottom: 14px; display: block; }
+    .audience-title { font-family: var(--font-d); font-weight: 800; font-size: 20px; margin-bottom: 10px; }
+    .audience-card.clinic .audience-title { color: #fff; }
+    .audience-card.doctor .audience-title { color: var(--sage); }
+    .audience-card.patient .audience-title { color: var(--blue); }
+    .audience-desc { font-size: 14px; line-height: 1.6; margin-bottom: 18px; }
+    .audience-card.clinic .audience-desc { color: rgba(255,255,255,0.55); }
+    .audience-card.doctor .audience-desc { color: var(--ink-sub); }
+    .audience-card.patient .audience-desc { color: var(--ink-sub); }
+    .audience-list { list-style: none; display: flex; flex-direction: column; gap: 7px; }
+    .audience-list li { font-size: 13px; display: flex; align-items: center; gap: 8px; }
+    .audience-card.clinic .audience-list li { color: rgba(255,255,255,0.7); }
+    .audience-card.doctor .audience-list li { color: var(--ink-mid); }
+    .audience-card.patient .audience-list li { color: var(--ink-mid); }
+    .audience-list li::before { content: '✓'; font-weight: 700; }
+    .audience-card.clinic .audience-list li::before { color: #4ADE80; }
+    .audience-card.doctor .audience-list li::before { color: var(--sage); }
+    .audience-card.patient .audience-list li::before { color: var(--blue); }
+
+    /* ── BLOG ── */
+    .blog-grid { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 16px; }
+    .blog-card { background: var(--white); border: 1px solid var(--border); border-radius: 14px; padding: 24px; transition: box-shadow 0.2s; text-decoration: none; display: block; }
+    .blog-card:hover { box-shadow: 0 6px 20px rgba(13,17,23,0.07); }
+    .blog-card.featured { background: var(--ink); }
+    .blog-tag { display: inline-block; font-size: 10px; font-weight: 700; font-family: var(--font-m); letter-spacing: 0.8px; text-transform: uppercase; padding: 3px 9px; border-radius: 4px; margin-bottom: 14px; }
+    .blog-card:not(.featured) .blog-tag { background: var(--sage-l); color: var(--sage); }
+    .blog-card.featured .blog-tag { background: rgba(74,222,128,0.15); color: #4ADE80; }
+    .blog-h { font-family: var(--font-d); font-weight: 700; font-size: 18px; line-height: 1.3; margin-bottom: 10px; }
+    .blog-card:not(.featured) .blog-h { color: var(--ink); }
+    .blog-card.featured .blog-h { color: #fff; font-size: 22px; }
+    .blog-excerpt { font-size: 13px; line-height: 1.6; margin-bottom: 18px; }
+    .blog-card:not(.featured) .blog-excerpt { color: var(--ink-sub); }
+    .blog-card.featured .blog-excerpt { color: rgba(255,255,255,0.5); }
+    .blog-meta { font-size: 11px; font-family: var(--font-m); }
+    .blog-card:not(.featured) .blog-meta { color: var(--ink-sub); opacity: 0.6; }
+    .blog-card.featured .blog-meta { color: rgba(255,255,255,0.3); }
+    .blog-card.dim { opacity: 0.5; pointer-events: none; }
+
+    /* ── WAITLIST ── */
+    .waitlist-inner { max-width: 600px; margin: 0 auto; text-align: center; }
+    .waitlist-form { display: flex; gap: 10px; margin-top: 32px; flex-wrap: wrap; justify-content: center; }
+    .waitlist-input { flex: 1; min-width: 200px; padding: 13px 18px; border: 1px solid var(--border); border-radius: 10px; font-size: 15px; font-family: var(--font-b); outline: none; transition: border-color 0.15s; color: var(--ink); background: var(--white); }
+    .waitlist-input:focus { border-color: var(--sage); }
+    .waitlist-input::placeholder { color: var(--ink-sub); }
+    #wl-success { color: var(--sage); font-weight: 600; margin-top: 16px; display: none; }
+
+    /* ── FOOTER ── */
+    footer { background: var(--ink); padding: 48px; }
+    .footer-inner { max-width: 1100px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 20px; }
+    .footer-logo { font-family: var(--font-d); font-weight: 800; font-size: 18px; color: #fff; text-decoration: none; }
+    .footer-logo span { color: #4ADE80; }
+    .footer-links { display: flex; gap: 28px; list-style: none; flex-wrap: wrap; }
+    .footer-links a { color: rgba(255,255,255,0.35); text-decoration: none; font-size: 14px; transition: color 0.15s; }
+    .footer-links a:hover { color: #fff; }
+    .footer-copy { font-size: 13px; color: rgba(255,255,255,0.2); }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 860px) {
+      nav { padding: 0 20px; }
+      .nav-links { display: none; }
+      .hero { grid-template-columns: 1fr; padding: 100px 20px 60px; gap: 40px; }
+      .section { padding: 60px 20px; }
+      .strip { padding: 20px; gap: 32px; }
+      .problem-grid, .features-grid, .audience-grid, .blog-grid { grid-template-columns: 1fr; }
+      .blog-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+  <nav>
+    <a href="#" class="logo">al<span>era</span></a>
+    <ul class="nav-links">
+      <li><a href="#features">Features</a></li>
+      <li><a href="#for-who">Who it's for</a></li>
+      <li><a href="#blog">Blog</a></li>
+    </ul>
+    <div class="nav-right">
+      <a href="#waitlist" class="btn btn-sage">Get early access</a>
+    </div>
+  </nav>
+
+  <!-- HERO -->
+  <div class="hero">
+    <div>
+      <div class="hero-badge"><div class="hero-badge-dot"></div>Private beta · Lagos</div>
+      <h1>Nigeria's <em>AI-Native</em> Clinical Platform</h1>
+      <p class="hero-sub">While others digitize paper records, Alera gives every Nigerian doctor an AI clinical assistant — and connects patient history across every clinic they've visited.</p>
+      <div class="hero-btns">
+        <a href="#waitlist" class="btn btn-sage btn-lg">Get early access →</a>
+      </div>
+      <div class="hero-social-proof">
+        <div class="hero-avatars">
+          <div class="hero-avatar">IO</div>
+          <div class="hero-avatar b">CA</div>
+          <div class="hero-avatar c">MO</div>
+        </div>
+        <div class="hero-social-text">Built by a team with <strong>5+ years EMR experience</strong> in Nigeria and the US</div>
+      </div>
+    </div>
+
+    <!-- Live mockup -->
+    <div class="hero-mockup">
+      <div class="mockup-topbar">
+        <div class="mockup-dots"><div class="mockup-dot dot-r"></div><div class="mockup-dot dot-y"></div><div class="mockup-dot dot-g"></div></div>
+        <div class="mockup-url">app.alera.ng</div>
+      </div>
+      <div class="mockup-nav">
+        <div class="mockup-logo">al<span>era</span></div>
+        <div class="mockup-pills">
+          <div class="mockup-pill active">Queue</div>
+          <div class="mockup-pill">Chart</div>
+          <div class="mockup-pill">Analytics</div>
+        </div>
+      </div>
+      <div class="mockup-body">
+        <div class="q-item">
+          <div class="q-avatar" style="background:#1A6650">AO</div>
+          <div><div class="q-name">Adaeze Okafor</div><div class="q-info">ALR-0042 · 8:47 AM</div></div>
+          <div class="q-badge badge-triage">For Triage</div>
+        </div>
+        <div class="q-item">
+          <div class="q-avatar" style="background:#1854A8">CJ</div>
+          <div><div class="q-name">Chidi Johnson</div><div class="q-info">ALR-0043 · 9:12 AM</div></div>
+          <div class="q-badge badge-doctor">With Doctor</div>
+        </div>
+        <div class="q-item">
+          <div class="q-avatar" style="background:#5E3FAE">FK</div>
+          <div><div class="q-name">Fatima Kalu</div><div class="q-info">ALR-0044 · 9:28 AM</div></div>
+          <div class="q-badge badge-pharmacy">For Pharmacy</div>
+        </div>
+        <div class="ai-panel">
+          <div class="ai-panel-header"><div class="ai-dot"></div><div class="ai-label">Alera AI · Differentials</div></div>
+          <div class="ai-dx"><div class="ai-dx-badge ai-dx-h">High</div><div class="ai-dx-name">Malaria (P. falciparum) B50.0</div></div>
+          <div class="ai-dx"><div class="ai-dx-badge ai-dx-m">Med</div><div class="ai-dx-name">Typhoid Fever A01.0</div></div>
+          <div class="ai-note">RDT positive + fever pattern. Recommend Coartem 80/480mg BD × 3 days.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- STRIP -->
+  <div class="strip">
+    <div class="strip-stat"><span class="strip-num">10,000+</span><span class="strip-label">Private clinics in Nigeria</span></div>
+    <div class="strip-stat"><span class="strip-num">Most</span><span class="strip-label">Still rely on paper records</span></div>
+    <div class="strip-stat"><span class="strip-num">&lt;20 sec</span><span class="strip-label">AI fills a full SOAP note</span></div>
+  </div>
+
+  <!-- PROBLEM -->
+  <div class="section">
+    <div class="section-inner">
+      <div class="problem-grid">
+        <div>
+          <span class="eyebrow">The Problem</span>
+          <h2 class="section-h">Nigerian healthcare runs on memory and paper.</h2>
+          <p class="section-p">When a patient walks into a Lagos clinic, their doctor has no idea what medications they're on, what they're allergic to, or what the clinic down the street diagnosed them last week. Every visit starts from zero.</p>
+          <p style="font-size:15px;color:var(--ink-sub);line-height:1.7">The EMR systems that exist were built for US hospitals with IT departments, stable internet, and dedicated trainers. They've failed Nigerian clinics for 20 years. We're not adapting them — we're replacing them.</p>
+        </div>
+        <div class="problem-cards">
+          <div class="problem-card">
+            <div class="problem-card-num">25%</div>
+            <div class="problem-card-text">of NHIS claims rejected due to paperwork errors — revenue clinics never recover</div>
+          </div>
+          <div class="problem-card">
+            <div class="problem-card-num">2–3 hrs</div>
+            <div class="problem-card-text">of documentation per shift for a Nigerian doctor seeing 30+ patients daily</div>
+          </div>
+          <div class="problem-card">
+            <div class="problem-card-num">0</div>
+            <div class="problem-card-text">patient records that follow you between private clinics in Nigeria today</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FEATURES -->
+  <div class="section section-alt" id="features">
+    <div class="section-inner">
+      <span class="eyebrow">What Alera Does</span>
+      <h2 class="section-h">Built different.<br/>From the ground up.</h2>
+      <p class="section-p">Not a digital filing cabinet. A clinical intelligence platform designed for how Nigerian healthcare actually works.</p>
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="feature-icon">🎙</div>
+          <div class="feature-title">Voice-First Documentation</div>
+          <div class="feature-desc">Doctor speaks naturally. AI fills the entire SOAP note, diagnosis, and prescription in seconds. No typing required.</div>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">✦</div>
+          <div class="feature-title">AI Diagnosis Assistant</div>
+          <div class="feature-desc">Real-time differential diagnoses tuned for Nigerian conditions — malaria, typhoid, sickle cell, hypertension — with ICD-10 codes.</div>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🌐</div>
+          <div class="feature-title">Patient Network (APID)</div>
+          <div class="feature-desc">Every patient gets an Alera ID. Their records follow them across any Alera clinic with consent. Nigeria's first connected health record.</div>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">📋</div>
+          <div class="feature-title">NHIS Claims Automation</div>
+          <div class="feature-desc">Claims generate automatically from encounter data. Submit, track, and appeal — all in one place. Stop losing money to paperwork.</div>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">📊</div>
+          <div class="feature-title">Revenue Intelligence</div>
+          <div class="feature-desc">AI-powered insights tell clinic owners exactly what's making money and what to do about it. Your clinic's CFO, built in.</div>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">📡</div>
+          <div class="feature-title">Offline-First</div>
+          <div class="feature-desc">Register patients, take vitals, write notes — all without internet. Syncs automatically when connectivity returns. Built for Lagos.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- AUDIENCE -->
+  <div class="section" id="for-who">
+    <div class="section-inner">
+      <span class="eyebrow">Who It's For</span>
+      <h2 class="section-h">One platform.<br/>Every role covered.</h2>
+      <p class="section-p" style="margin-bottom:40px">From the receptionist at the front desk to the patient on their phone.</p>
+      <div class="audience-grid">
+        <div class="audience-card clinic">
+          <span class="audience-emoji">🏥</span>
+          <div class="audience-title">Clinic Owners</div>
+          <div class="audience-desc">Run your clinic like a business. Real-time revenue intelligence, NHIS automation, and full staff management.</div>
+          <ul class="audience-list">
+            <li>Revenue intelligence dashboard</li>
+            <li>NHIS claims automation</li>
+            <li>Staff invite and management</li>
+            <li>Appointment scheduling</li>
+          </ul>
+        </div>
+        <div class="audience-card doctor">
+          <span class="audience-emoji">🩺</span>
+          <div class="audience-title">Doctors & Nurses</div>
+          <div class="audience-desc">Spend less time on paperwork, more time with patients. Voice documentation and AI diagnosis support.</div>
+          <ul class="audience-list">
+            <li>Voice-first SOAP documentation</li>
+            <li>AI differential diagnosis</li>
+            <li>Full patient chart history</li>
+            <li>Prescription management</li>
+          </ul>
+        </div>
+        <div class="audience-card patient">
+          <span class="audience-emoji">👤</span>
+          <div class="audience-title">Patients</div>
+          <div class="audience-desc">Your health history, in your pocket. Book appointments, message your clinic, and ask our AI anything.</div>
+          <ul class="audience-list">
+            <li>Personal health record (APID)</li>
+            <li>Book at any Alera clinic</li>
+            <li>AI health assistant</li>
+            <li>Message your doctor directly</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- BLOG -->
+  <div class="section section-alt" id="blog">
+    <div class="section-inner">
+      <span class="eyebrow">From the Founder</span>
+      <h2 class="section-h">Thinking about<br/>Nigerian healthcare.</h2>
+      <p class="section-p" style="margin-bottom:40px">Research, insights, and honest takes on building healthcare technology in Nigeria.</p>
+      <div class="blog-grid">
+        <a href="blog-paper.html" class="blog-card featured">
+          <div class="blog-tag">Market</div>
+          <div class="blog-h">Why Nigerian Clinics Are Still Running on Paper in 2026</div>
+          <div class="blog-excerpt">In 2026, with AI reshaping industries and smartphones in every pocket, the vast majority of private clinics in Nigeria still manage patient records on paper. I walked into a clinic in Lagos last month and saw a stack of folders held together with a rubber band...</div>
+          <div class="blog-meta">Ismail Oluwo · June 2026 · 6 min read</div>
+        </a>
+        <a href="blog-nhia.html" class="blog-card">
+  <div class="blog-tag" style="background:var(--sage-l);color:var(--sage)">Operations &amp; Costs</div>
+  <div class="blog-h" style="color:var(--ink)">The Hidden Cost of NHIA Claims Is Sitting in Your Paper Records</div>
+  <div class="blog-excerpt" style="color:var(--ink-sub)">Nigerian clinics lose money every month to rejected NHIA claims. Most don't realise it's happening — because the cost doesn't show up on the day the care is delivered...</div>
+  <div class="blog-meta" style="color:var(--ink-sub)">Ismail Oluwo · July 2026 · 2 min read</div>
+</a>
+        <div class="blog-card dim">
+          <div class="blog-tag" style="background:var(--sage-l);color:var(--sage)">Founder</div>
+          <div class="blog-h" style="color:var(--ink)">Why I Left Investment Banking to Build Nigeria's First AI EMR</div>
+          <div class="blog-excerpt" style="color:var(--ink-sub)">Five years implementing Epic. Three years at Morgan Stanley. One conversation that changed everything...</div>
+          <div class="blog-meta" style="color:var(--ink-sub)">Coming soon</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- WAITLIST -->
+  <div class="section" id="waitlist">
+    <div class="waitlist-inner">
+      <span class="eyebrow">Early Access</span>
+      <h2 class="section-h" style="font-size:clamp(28px,4vw,48px)">Ready to modernize your clinic?</h2>
+      <p style="font-size:17px;color:var(--ink-sub);line-height:1.7;margin-top:12px">Join the waitlist. We're onboarding clinics in Lagos now — with full setup support and 3 months free.</p>
+      <form class="waitlist-form" id="waitlist-form" action="https://formspree.io/f/xojzpqer" method="POST">
+        <input class="waitlist-input" type="text" name="clinic" placeholder="Clinic name" required />
+        <input class="waitlist-input" type="email" name="email" placeholder="Your email address" required />
+        <button type="submit" class="btn btn-sage btn-lg">Join waitlist →</button>
+      </form>
+      <p id="wl-success">✓ You're on the list. We'll be in touch personally.</p>
+      <p style="font-size:13px;color:var(--ink-sub);margin-top:16px;opacity:0.6">No spam. No commitment. We reach out personally.</p>
+    </div>
+  </div>
+
+  <!-- FOOTER -->
+  <footer>
+    <div class="footer-inner">
+      <a href="#" class="footer-logo">al<span>era</span></a>
+      <ul class="footer-links">
+        <li><a href="#features">Features</a></li>
+        <li><a href="#for-who">Who it's for</a></li>
+        <li><a href="#blog">Blog</a></li>
+        <li><a href="#waitlist">Get access</a></li>
+      </ul>
+      <div class="footer-copy">© 2026 Alera. Built in Lagos.</div>
+    </div>
+  </footer>
+
+  <script>
+    const form = document.getElementById('waitlist-form');
+    if (form) {
+      form.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const data = new FormData(form);
+        const response = await fetch(form.action, {
+          method: 'POST',
+          body: data,
+          headers: { 'Accept': 'application/json' }
+        });
+        if (response.ok) {
+          form.style.display = 'none';
+          document.getElementById('wl-success').style.display = 'block';
+        }
+      });
+    }
+
+    document.querySelectorAll('a[href^="#"]').forEach(a => {
+      a.addEventListener('click', e => {
+        const target = document.querySelector(a.getAttribute('href'));
+        if (target) { e.preventDefault(); target.scrollIntoView({ behavior: 'smooth' }); }
+      });
+    });
+  </script>
+</body>
+</html>
